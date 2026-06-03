@@ -38,5 +38,9 @@ class User(Base, TimestampMixin):
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Davet akisi: davet edilen kullanici kabul edene kadar is_active=False + token tutar
+    invite_token: Mapped[str | None] = mapped_column(
+        String(80), unique=True, index=True, nullable=True
+    )
 
     organization: Mapped["Organization"] = relationship(back_populates="users")

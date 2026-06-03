@@ -26,6 +26,9 @@ export default function TeamPage() {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("member");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteLink, setInviteLink] = useState("");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -52,6 +55,26 @@ export default function TeamPage() {
       setPassword("");
       setRole("member");
       setMsg("Kullanıcı eklendi.");
+      await load();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function invite(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    setMsg("");
+    setInviteLink("");
+    try {
+      const r = await api<{ email: string; invite_link: string; email_sent: boolean }>(
+        "/team/invite",
+        { body: { email: inviteEmail, role: inviteRole } }
+      );
+      setInviteEmail("");
+      setInviteRole("member");
+      setInviteLink(r.invite_link);
+      setMsg(r.email_sent ? "Davet e-postası gönderildi." : "Davet oluşturuldu (linki paylaşın).");
       await load();
     } catch (e: any) {
       setErr(e.message);
@@ -137,6 +160,40 @@ export default function TeamPage() {
             + Ekle
           </button>
         </form>
+      )}
+
+      {canManage && (
+        <form
+          onSubmit={invite}
+          className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-4"
+        >
+          <input
+            required
+            type="email"
+            placeholder="Davet e-postası"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500 sm:col-span-2"
+          />
+          <select
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value)}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          >
+            <option value="member">Üye</option>
+            <option value="admin">Yönetici</option>
+          </select>
+          <button className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-800">
+            ✉ Davet et
+          </button>
+        </form>
+      )}
+
+      {inviteLink && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-3 text-xs">
+          <div className="mb-1 text-slate-400">Davet linki (paylaşın):</div>
+          <code className="block break-all text-sky-300">{inviteLink}</code>
+        </div>
       )}
 
       <div className="space-y-2">

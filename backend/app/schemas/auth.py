@@ -23,6 +23,11 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class AcceptInviteRequest(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     email: EmailStr

@@ -70,10 +70,12 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("is_active", sa.Boolean(), nullable=False),
+        sa.Column("invite_token", sa.String(80), nullable=True),
         *_ts_columns(),
     )
     op.create_index("ix_users_organization_id", "users", ["organization_id"])
     op.create_index("ix_users_email", "users", ["email"], unique=True)
+    op.create_index("ix_users_invite_token", "users", ["invite_token"], unique=True)
 
     # subscriptions
     op.create_table(

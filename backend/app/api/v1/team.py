@@ -5,6 +5,7 @@ Kullanici olusturma/guncelleme/silme yalnizca OWNER ve ADMIN icindir.
 """
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime
 
@@ -13,10 +14,12 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, require_role
 from app.core.security import hash_password
 from app.core_services.audit import record_audit
+from app.core_services.notifications.engine import send_email
 from app.models.user import User, UserRole
 
 router = APIRouter()
@@ -44,6 +47,18 @@ class TeamUserCreate(BaseModel):
 class TeamUserUpdate(BaseModel):
     role: UserRole | None = None
     is_active: bool | None = None
+
+
+class InviteCreate(BaseModel):
+    email: EmailStr
+    full_name: str | None = Field(default=None, max_length=200)
+    role: UserRole = UserRole.MEMBER
+
+
+class InviteOut(BaseModel):
+    email: str
+    invite_link: str
+    email_sent: bool
 
 
 def _manager_roles():
@@ -93,6 +108,55 @@ async def create_team_user(
         detail=f"{email} ({payload.role.value})",
     )
     return user
+
+
+@router.post("/invite", response_model=InviteOut, status_code=201)
+async def invite_team_user(
+    payload: InviteCreate,
+    manager: User = Depends(_manager_roles()),
+    db: AsyncSession = Depends(get_db),
+) -> InviteOut:
+    """Bir kullaniciyi davet eder: pasif hesap + davet token'i olusturur, e-posta gonderir.
+
+    SMTP yapilandirilmamissa davet linki yanitta doner (demo/elle paylasim icin).
+    """
+    if payload.role == UserRole.OWNER:
+        raise HTTPException(status_code=422, detail="OWNER rolu davet edilemez")
+    email = payload.email.lower()
+    exists = await db.execute(select(User).where(User.email == email))
+    if exists.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=400, detail="Bu e-posta zaten kayitli")
+
+    token = secrets.token_urlsafe(32)
+    user = User(
+        organization_id=manager.organization_id,
+        email=email,
+        # Kullanilamaz gecici parola; kabul sirasinda gercek parola belirlenir
+        hashed_password=hash_password(secrets.token_urlsafe(16)),
+        full_name=payload.full_name,
+        role=payload.role,
+        is_active=False,
+        invite_token=token,
+    )
+    db.add(user)
+    await db.flush()
+
+    invite_link = f"{settings.frontend_origin}/accept-invite?token={token}"
+    email_sent = send_email(
+        email,
+        "Argus Intelligence - ekip daveti",
+        f"Ekibe davet edildiniz. Hesabinizi etkinlestirmek icin: {invite_link}",
+    )
+    record_audit(
+        db,
+        organization_id=manager.organization_id,
+        user_id=manager.id,
+        action="user.invite",
+        target_type="user",
+        target_id=str(user.id),
+        detail=f"{email} ({payload.role.value})",
+    )
+    return InviteOut(email=email, invite_link=invite_link, email_sent=email_sent)
 
 
 async def _get_member(user_id: uuid.UUID, tenant_id: uuid.UUID, db: AsyncSession) -> User:
