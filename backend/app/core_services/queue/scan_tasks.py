@@ -46,6 +46,8 @@ def _channels_for(org: Organization | None) -> OutputChannels:
         jira_token=org.jira_token,
         jira_project_key=org.jira_project_key,
         email_to=org.notify_email,
+        gov_report_url=org.gov_report_url,
+        gov_report_token=org.gov_report_token,
     )
 
 
@@ -133,6 +135,7 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
                         summary=triaged.summary,
                         recommendation=triaged.recommendation,
                         asset_value=result.asset_value,
+                        module_key=monitor.module_key,
                         channels=channels,
                     )
 

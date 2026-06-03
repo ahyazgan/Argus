@@ -30,6 +30,13 @@ _JIRA_PRIORITY = {
     "low": "Low",
     "info": "Lowest",
 }
+# Modul -> ilgili kamu kurumu (ihbar payload'inda yonlendirme ipucu)
+_GOV_AUTHORITY = {
+    "illegal_site": "BTK",  # kumar/dolandiricilik -> BTK Ihbarweb
+    "darkweb": "USOM",  # siber olay -> USOM/TR-CERT
+    "financial_crime": "MASAK",  # supheli finansal islem -> MASAK
+    "disinformation": "BTK",
+}
 
 
 @dataclass
@@ -45,6 +52,10 @@ class OutputChannels:
     jira_token: str | None = None
     jira_project_key: str | None = None
     email_to: str | None = None
+    # Kamu/BTK ihbar entegrasyonu: yapilandirilabilir bir uc noktaya (uyum sistemi /
+    # e-Devlet relay) yapilandirilmis ihbar payload'i gonderir. BTK'nin acik API'si yoktur.
+    gov_report_url: str | None = None
+    gov_report_token: str | None = None
 
     def any_configured(self) -> bool:
         return any(
@@ -54,6 +65,7 @@ class OutputChannels:
                 self.github_repo and self.github_token,
                 self.jira_base_url and self.jira_token and self.jira_project_key,
                 self.email_to,
+                self.gov_report_url,
             ]
         )
 
@@ -118,6 +130,28 @@ def jira_issue_payload(
     }
 
 
+def gov_report_payload(
+    title: str,
+    severity: str,
+    summary: str,
+    recommendation: str | None,
+    asset_value: str,
+    module_key: str | None,
+) -> dict:
+    """Kamu ihbar uc noktasi icin yapilandirilmis ihbar payload'i."""
+    return {
+        "event": "gov.report",
+        "authority": _GOV_AUTHORITY.get(module_key or "", "BTK"),
+        "module": module_key,
+        "title": title,
+        "severity": severity,
+        "asset_value": asset_value,
+        "summary": summary,
+        "recommendation": recommendation,
+        "kaynak": "Argus Intelligence",
+    }
+
+
 # --- Gondericiler ---
 
 def send_webhook(url: str, payload: dict) -> bool:
@@ -161,6 +195,16 @@ def create_jira_issue(base_url: str, email: str, token: str, payload: dict) -> b
         return False
 
 
+def send_gov_report(url: str, token: str | None, payload: dict) -> bool:
+    """Kamu ihbar uc noktasina yapilandirilmis ihbar gonderir (opsiyonel Bearer token)."""
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=15.0)
+        return resp.is_success
+    except httpx.HTTPError:
+        return False
+
+
 def send_email(to_addr: str, subject: str, body: str) -> bool:
     if not settings.smtp_host:
         return False
@@ -187,6 +231,7 @@ def notify_finding(
     summary: str,
     asset_value: str,
     recommendation: str | None = None,
+    module_key: str | None = None,
     channels: OutputChannels,
 ) -> dict:
     """Bir bulgu icin tum yapilandirilmis kanallara bildirim/ticket gonderir."""
@@ -229,5 +274,11 @@ def notify_finding(
             + (f"\n\nÖnerilen aksiyon: {recommendation}" if recommendation else "")
         )
         results["email"] = send_email(channels.email_to, f"[Argus] {title}", body)
+    if channels.gov_report_url:
+        results["gov_report"] = send_gov_report(
+            channels.gov_report_url,
+            channels.gov_report_token,
+            gov_report_payload(title, severity, summary, recommendation, asset_value, module_key),
+        )
 
     return results

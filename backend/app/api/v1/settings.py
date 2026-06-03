@@ -27,6 +27,8 @@ class SettingsOut(BaseModel):
     jira_email: str | None
     jira_project_key: str | None
     has_jira_token: bool
+    gov_report_url: str | None
+    has_gov_report_token: bool
     has_api_key: bool
 
 
@@ -40,6 +42,8 @@ class SettingsUpdate(BaseModel):
     jira_email: str | None = None
     jira_token: str | None = None
     jira_project_key: str | None = None
+    gov_report_url: str | None = None
+    gov_report_token: str | None = None
 
 
 class ApiKeyOut(BaseModel):
@@ -64,6 +68,8 @@ def _view(org: Organization) -> SettingsOut:
         jira_email=org.jira_email,
         jira_project_key=org.jira_project_key,
         has_jira_token=bool(org.jira_token),
+        gov_report_url=org.gov_report_url,
+        has_gov_report_token=bool(org.gov_report_token),
         has_api_key=bool(org.api_key),
     )
 
@@ -103,6 +109,10 @@ async def update_settings(
         org.jira_token = payload.jira_token
     if payload.jira_project_key is not None:
         org.jira_project_key = payload.jira_project_key or None
+    if payload.gov_report_url is not None:
+        org.gov_report_url = payload.gov_report_url or None
+    if payload.gov_report_token:
+        org.gov_report_token = payload.gov_report_token
     await db.flush()
     return _view(org)
 

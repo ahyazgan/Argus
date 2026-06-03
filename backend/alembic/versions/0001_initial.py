@@ -48,6 +48,8 @@ def upgrade() -> None:
         sa.Column("jira_email", sa.String(320), nullable=True),
         sa.Column("jira_token", sa.String(255), nullable=True),
         sa.Column("jira_project_key", sa.String(40), nullable=True),
+        sa.Column("gov_report_url", sa.String(500), nullable=True),
+        sa.Column("gov_report_token", sa.String(255), nullable=True),
         sa.Column("api_key", sa.String(80), nullable=True),
         *_ts_columns(),
     )

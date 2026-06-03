@@ -34,6 +34,9 @@ class Organization(Base, TimestampMixin):
     jira_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     jira_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     jira_project_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Kamu/BTK ihbar entegrasyonu (yapilandirilabilir uc nokta)
+    gov_report_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    gov_report_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Dis entegrasyon (REST API) icin API anahtari
     api_key: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
 
