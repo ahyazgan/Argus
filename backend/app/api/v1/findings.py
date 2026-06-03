@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -14,6 +15,65 @@ from app.models.finding import Finding, FindingStatus
 from app.schemas.monitor import FindingOut
 
 router = APIRouter()
+
+
+class StatsOut(BaseModel):
+    total: int
+    open: int  # new + triaged
+    by_severity: dict[str, int]
+    by_module: dict[str, int]
+    by_day: list[dict]  # [{"day": "2026-06-01", "count": 3}, ...] son 14 gun
+
+
+@router.get("/stats", response_model=StatsOut)
+async def finding_stats(
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> StatsOut:
+    base = select(Finding).where(Finding.organization_id == tenant_id)
+
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    open_count = (
+        await db.execute(
+            select(func.count()).select_from(
+                base.where(
+                    Finding.status.in_([FindingStatus.NEW, FindingStatus.TRIAGED])
+                ).subquery()
+            )
+        )
+    ).scalar_one()
+
+    sev_rows = await db.execute(
+        select(Finding.severity, func.count())
+        .where(Finding.organization_id == tenant_id)
+        .group_by(Finding.severity)
+    )
+    by_severity = {str(getattr(s, "value", s)): c for s, c in sev_rows.all()}
+
+    mod_rows = await db.execute(
+        select(Finding.module_key, func.count())
+        .where(Finding.organization_id == tenant_id)
+        .group_by(Finding.module_key)
+    )
+    by_module = {k: c for k, c in mod_rows.all()}
+
+    since = datetime.now(timezone.utc) - timedelta(days=13)
+    day_col = func.date_trunc("day", Finding.detected_at)
+    day_rows = await db.execute(
+        select(day_col.label("day"), func.count())
+        .where(Finding.organization_id == tenant_id, Finding.detected_at >= since)
+        .group_by(day_col)
+        .order_by(day_col)
+    )
+    by_day = [{"day": d.date().isoformat(), "count": c} for d, c in day_rows.all()]
+
+    return StatsOut(
+        total=total,
+        open=open_count,
+        by_severity=by_severity,
+        by_module=by_module,
+        by_day=by_day,
+    )
 
 
 @router.get("", response_model=list[FindingOut])

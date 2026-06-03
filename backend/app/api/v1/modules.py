@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -13,6 +14,29 @@ from app.modules.catalog import CATALOG, CATALOG_BY_KEY
 from app.schemas.module import ModuleOut, SubscriptionOut, ToggleModuleRequest
 
 router = APIRouter()
+
+
+class PublicModuleOut(BaseModel):
+    key: str
+    name: str
+    description: str
+    category: str
+    available: bool
+
+
+@router.get("/catalog", response_model=list[PublicModuleOut])
+async def public_catalog() -> list[PublicModuleOut]:
+    """Pazarlama/landing icin kimlik dogrulamasiz modul katalogu."""
+    return [
+        PublicModuleOut(
+            key=m.key,
+            name=m.name,
+            description=m.description,
+            category=m.category,
+            available=m.enabled,
+        )
+        for m in CATALOG
+    ]
 
 
 @router.get("", response_model=list[ModuleOut])
