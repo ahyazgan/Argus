@@ -105,11 +105,17 @@ Servisler:
 ## Testler
 
 ```bash
-docker compose exec backend pytest
+docker compose exec backend pytest            # çekirdek birim testleri (DB'siz)
+docker compose exec backend pytest -m integration   # canlı API testleri (kimlik bilgisi gerektirir)
 ```
 
-DB gerektirmeyen çekirdek birim testleri (`backend/tests/test_core.py`):
-slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo konnektör.
+DB gerektirmeyen çekirdek birim testleri (`backend/tests/test_core.py`): slugify, parola hash,
+plan limitleri, modül katalogu, sezgisel triyaj, demo konnektör, bulgu parmak izi/eşik,
+çıktı payload'ları, zamanlama mantığı.
+
+**Entegrasyon testleri** (`backend/tests/integration/`) gerçek HIBP / Shodan / GitHub / Stripe
+API'lerine vurur; ilgili ortam değişkeni yoksa **atlanır** (CI'da varsayılan yeşil). Yalnızca
+`pytest -m integration` ile çalıştırılır.
 
 ---
 
@@ -124,8 +130,12 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 - **Stripe** gerçek akış için hazır: `STRIPE_ENABLED=true` + `STRIPE_SECRET_KEY` +
   `STRIPE_PRICE_*` ile checkout oturumu açılır, `/billing/webhook` imza doğrulayıp
   aboneliği günceller. Kapalıyken stub döner (plan limiti dayatması yine çalışır).
-- **Çıktı kanalları:** Dashboard, PDF, REST, Webhook/Slack, **GitHub Issues**, **Jira**
-  ve e-posta canlı (kurum ayarlarından yapılandırılır). BTK/kamu API "yakında".
+- **Çıktı kanalları:** Dashboard, PDF, REST, Webhook/Slack, **GitHub Issues**, **Jira**,
+  e-posta ve **kamu/BTK ihbar** kanalı canlı (kurum ayarlarından yapılandırılır). BTK İhbarweb'in
+  açık API'si olmadığından kamu kanalı, yapılandırılabilir bir uç noktaya (uyum/e-Devlet relay)
+  yapılandırılmış ihbar gönderir; modüle göre BTK/MASAK/USOM işaretler.
+- **Çok kullanıcılı:** Organizasyon başına kullanıcılar ve roller (Sahip/Yönetici/Üye); Ekip
+  sayfasından yönetilir, rol bazlı yetki (`require_role`) backend'de dayatılır.
 - **Windows yerel (Docker'sız) çalıştırma:** Celery için `--pool=solo`, WeasyPrint için GTK
   bağımlılıkları gerekir; bu yüzden birincil yol Docker'dır.
 
@@ -142,4 +152,6 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 - ~~Gerçek dark web / sızıntı feed entegrasyonları~~ — **tamamlandı:** HIBP + Shodan
   (API anahtarı gerektirir; anahtarsız demo konnektör çalışır)
 - CI + Alembic baseline + bağımlılık pinleri — **tamamlandı**
-- Kalan: BTK/kamu API çıktı kanalı, çok kullanıcılı rol yönetimi, gerçek-zamanlı entegrasyon testleri
+- ~~BTK/kamu çıktı kanalı~~ — **tamamlandı** (yapılandırılabilir uç nokta; BTK/MASAK/USOM)
+- ~~Çok kullanıcılı rol yönetimi~~ — **tamamlandı** (Sahip/Yönetici/Üye + `require_role`)
+- ~~Canlı API'lere karşı entegrasyon testleri~~ — **tamamlandı** (`pytest -m integration`)
