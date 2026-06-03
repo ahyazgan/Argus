@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, require_role
 from app.core.security import hash_password
+from app.core_services.audit import record_audit
 from app.models.user import User, UserRole
 
 router = APIRouter()
@@ -82,6 +83,15 @@ async def create_team_user(
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    record_audit(
+        db,
+        organization_id=manager.organization_id,
+        user_id=manager.id,
+        action="user.create",
+        target_type="user",
+        target_id=str(user.id),
+        detail=f"{email} ({payload.role.value})",
+    )
     return user
 
 
@@ -115,6 +125,15 @@ async def update_team_user(
         target.is_active = payload.is_active
     await db.flush()
     await db.refresh(target)
+    record_audit(
+        db,
+        organization_id=manager.organization_id,
+        user_id=manager.id,
+        action="user.update",
+        target_type="user",
+        target_id=str(target.id),
+        detail=f"rol={target.role.value} aktif={target.is_active}",
+    )
     return target
 
 
@@ -129,4 +148,13 @@ async def delete_team_user(
         raise HTTPException(status_code=409, detail="Kendinizi silemezsiniz")
     if target.role == UserRole.OWNER:
         raise HTTPException(status_code=409, detail="OWNER hesabi silinemez")
+    record_audit(
+        db,
+        organization_id=manager.organization_id,
+        user_id=manager.id,
+        action="user.delete",
+        target_type="user",
+        target_id=str(target.id),
+        detail=target.email,
+    )
     await db.delete(target)

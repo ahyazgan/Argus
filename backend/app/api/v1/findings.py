@@ -10,8 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_tenant_id
+from app.core.deps import get_current_tenant_id, get_current_user
+from app.core_services.audit import record_audit
 from app.models.finding import Finding, FindingStatus
+from app.models.user import User
 from app.schemas.monitor import FindingOut
 
 router = APIRouter()
@@ -108,6 +110,7 @@ class FindingStatusUpdate(BaseModel):
 async def update_finding_status(
     finding_id: uuid.UUID,
     payload: FindingStatusUpdate,
+    user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> Finding:
@@ -118,6 +121,15 @@ async def update_finding_status(
     if finding is None:
         raise HTTPException(status_code=404, detail="Bulgu bulunamadi")
     finding.status = payload.status
+    record_audit(
+        db,
+        organization_id=tenant_id,
+        user_id=user.id,
+        action="finding.status",
+        target_type="finding",
+        target_id=str(finding.id),
+        detail=payload.status.value,
+    )
     await db.flush()
     await db.refresh(finding)
     return finding

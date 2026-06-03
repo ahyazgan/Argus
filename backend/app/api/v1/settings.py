@@ -9,8 +9,10 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_tenant_id
+from app.core.deps import get_current_tenant_id, get_current_user
+from app.core_services.audit import record_audit
 from app.models.tenant import Organization
+from app.models.user import User
 
 router = APIRouter()
 
@@ -85,6 +87,7 @@ async def get_settings_view(
 @router.put("", response_model=SettingsOut)
 async def update_settings(
     payload: SettingsUpdate,
+    user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> SettingsOut:
@@ -113,6 +116,14 @@ async def update_settings(
         org.gov_report_url = payload.gov_report_url or None
     if payload.gov_report_token:
         org.gov_report_token = payload.gov_report_token
+    record_audit(
+        db,
+        organization_id=tenant_id,
+        user_id=user.id,
+        action="settings.update",
+        target_type="organization",
+        target_id=str(tenant_id),
+    )
     await db.flush()
     return _view(org)
 

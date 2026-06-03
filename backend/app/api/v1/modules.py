@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import get_db
-from app.core.deps import get_subscription
+from app.core.deps import get_current_user, get_subscription
 from app.core.plans import PLANS, module_limit_for
+from app.core_services.audit import record_audit
 from app.models.subscription import Subscription
+from app.models.user import User
 from app.modules.catalog import CATALOG, CATALOG_BY_KEY
 from app.schemas.module import ModuleOut, SubscriptionOut, ToggleModuleRequest
 
@@ -73,6 +75,7 @@ async def get_subscription_info(sub: Subscription = Depends(get_subscription)) -
 async def toggle_module(
     payload: ToggleModuleRequest,
     sub: Subscription = Depends(get_subscription),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SubscriptionOut:
     meta = CATALOG_BY_KEY.get(payload.module_key)
@@ -99,6 +102,14 @@ async def toggle_module(
 
     sub.enabled_modules = enabled
     flag_modified(sub, "enabled_modules")
+    record_audit(
+        db,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        action="module.enable" if payload.enable else "module.disable",
+        target_type="module",
+        target_id=payload.module_key,
+    )
     await db.flush()
 
     spec = PLANS[sub.plan]

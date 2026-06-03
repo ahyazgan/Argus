@@ -172,8 +172,24 @@ def upgrade() -> None:
     op.create_index("ix_findings_module_key", "findings", ["module_key"])
     op.create_index("ix_findings_fingerprint", "findings", ["fingerprint"])
 
+    # audit_logs
+    op.create_table(
+        "audit_logs",
+        sa.Column("id", UUID, primary_key=True),
+        sa.Column("organization_id", UUID, sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", UUID, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("action", sa.String(80), nullable=False),
+        sa.Column("target_type", sa.String(50), nullable=True),
+        sa.Column("target_id", sa.String(80), nullable=True),
+        sa.Column("detail", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    )
+    op.create_index("ix_audit_logs_organization_id", "audit_logs", ["organization_id"])
+    op.create_index("ix_audit_logs_created_at", "audit_logs", ["created_at"])
+
 
 def downgrade() -> None:
+    op.drop_table("audit_logs")
     op.drop_table("findings")
     op.drop_table("tasks")
     op.drop_table("monitors")

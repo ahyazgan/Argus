@@ -85,6 +85,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <Link href="/team" className={linkClass(pathname === "/team")}>
             <span className="w-4 text-center">⊕</span> Ekip
           </Link>
+          <Link href="/audit" className={linkClass(pathname === "/audit")}>
+            <span className="w-4 text-center">▤</span> Denetim
+          </Link>
           <Link href="/settings" className={linkClass(pathname === "/settings")}>
             <span className="w-4 text-center">⚙</span> Ayarlar
           </Link>

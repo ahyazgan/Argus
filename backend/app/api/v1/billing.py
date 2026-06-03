@@ -10,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_tenant_id, get_subscription
+from app.core.deps import get_current_tenant_id, get_current_user, get_subscription
 from app.core.plans import PLANS, PlanTier
+from app.core_services.audit import record_audit
 from app.models.subscription import Subscription, SubscriptionStatus
+from app.models.user import User
 
 router = APIRouter()
 
@@ -161,6 +163,7 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
 async def change_plan(
     payload: ChangePlanRequest,
     sub: Subscription = Depends(get_subscription),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PlanOut:
     """Plan kademesini degistirir (stub - gercek odeme olmadan; test/limit gosterimi icin).
@@ -178,6 +181,14 @@ async def change_plan(
             ),
         )
     sub.plan = payload.plan
+    record_audit(
+        db,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        action="billing.change_plan",
+        target_type="subscription",
+        detail=payload.plan.value,
+    )
     await db.flush()
     return PlanOut(
         tier=new_spec.tier.value,
