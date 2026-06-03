@@ -105,17 +105,19 @@ Servisler:
 ## Testler
 
 ```bash
-docker compose exec backend pytest            # çekirdek birim testleri (DB'siz)
-docker compose exec backend pytest -m integration   # canlı API testleri (kimlik bilgisi gerektirir)
+docker compose exec backend pytest                  # çekirdek birim testleri (DB'siz)
+docker compose exec backend pytest tests/api         # DB'li uçtan uca API testleri
+docker compose exec backend pytest -m integration    # canlı API testleri (kimlik bilgisi gerektirir)
 ```
 
-DB gerektirmeyen çekirdek birim testleri (`backend/tests/test_core.py`): slugify, parola hash,
-plan limitleri, modül katalogu, sezgisel triyaj, demo konnektör, bulgu parmak izi/eşik,
-çıktı payload'ları, zamanlama mantığı.
-
-**Entegrasyon testleri** (`backend/tests/integration/`) gerçek HIBP / Shodan / GitHub / Stripe
-API'lerine vurur; ilgili ortam değişkeni yoksa **atlanır** (CI'da varsayılan yeşil). Yalnızca
-`pytest -m integration` ile çalıştırılır.
+- **Çekirdek birim testleri** (`tests/test_core.py`, DB'siz): slugify, parola hash, plan
+  limitleri, modül katalogu, sezgisel triyaj, demo konnektör, bulgu parmak izi/eşik, çıktı
+  payload'ları, zamanlama + rapor vade mantığı, rate-limit penceresi.
+- **API testleri** (`tests/api/`): FastAPI ASGI + gerçek Postgres üzerinden uçtan uca akış
+  (auth, RBAC, modül/monitör, plan limiti, stats). `DATABASE_URL` yoksa atlanır; CI'da bir
+  postgres servisi ile koşar.
+- **Entegrasyon testleri** (`tests/integration/`): gerçek HIBP / Shodan / GitHub / Stripe
+  API'lerine vurur; ilgili ortam değişkeni yoksa atlanır. `pytest -m integration`.
 
 ---
 
