@@ -48,6 +48,7 @@ type Finding = {
   recommendation: string | null;
   source: string;
   asset_value: string;
+  seen_count: number;
 };
 
 const SEV_COLOR: Record<string, string> = {
@@ -349,6 +350,11 @@ export default function ModulePage() {
                   {f.severity}
                 </span>
                 <span className="font-medium">{f.title}</span>
+                {f.seen_count > 1 && (
+                  <span className="rounded-full bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400">
+                    {f.seen_count}× görüldü
+                  </span>
+                )}
                 <span className="ml-auto text-xs text-slate-500">{f.source}</span>
               </div>
               {f.summary && <p className="mt-2 text-sm text-slate-300">{f.summary}</p>}

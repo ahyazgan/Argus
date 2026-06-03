@@ -10,7 +10,11 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import select
+
+from app.core.config import settings
 from app.core.sync_db import SyncSessionLocal
+from app.core.utils import finding_fingerprint, severity_at_least
 from app.core_services.notifications.engine import notify_finding
 from app.core_services.queue.celery_app import celery_app
 from app.models.finding import Finding, FindingSeverity
@@ -33,6 +37,7 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
     """Bir monitor icin (modulune gore) tarama calistirir, bulgulari kaydeder ve bildirir."""
     load_modules()  # worker surecinde modullerin kayitli oldugundan emin ol
     findings_count = 0
+    updated_count = 0
 
     with SyncSessionLocal() as db:
         task = db.get(Task, uuid.UUID(task_id))
@@ -58,6 +63,28 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
 
             for result in scan_results:
                 triaged = module.analyze(result, monitor)
+                now = datetime.now(timezone.utc)
+                fingerprint = finding_fingerprint(
+                    monitor.module_key, monitor.id, result.raw_data
+                )
+
+                existing = db.execute(
+                    select(Finding).where(
+                        Finding.monitor_id == monitor.id,
+                        Finding.fingerprint == fingerprint,
+                    )
+                ).scalar_one_or_none()
+
+                if existing is not None:
+                    # Ayni bulgu yeniden gorundu: cogaltma; say ve guncelle (re-triyaj degisebilir)
+                    existing.seen_count += 1
+                    existing.last_seen_at = now
+                    existing.severity = _to_severity(triaged.severity)
+                    existing.summary = triaged.summary
+                    existing.recommendation = triaged.recommendation
+                    updated_count += 1
+                    continue
+
                 db.add(
                     Finding(
                         organization_id=monitor.organization_id,
@@ -70,11 +97,19 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
                         source=result.source,
                         asset_value=result.asset_value,
                         raw_data=result.raw_data,
+                        fingerprint=fingerprint,
+                        seen_count=1,
+                        last_seen_at=now,
                     )
                 )
                 findings_count += 1
 
-                if org and (org.webhook_url or org.slack_webhook_url):
+                # Bildirim: yalnizca YENI ve esik (notify_min_severity) ustu bulgular icin
+                if (
+                    org
+                    and (org.webhook_url or org.slack_webhook_url)
+                    and severity_at_least(triaged.severity, settings.notify_min_severity)
+                ):
                     notify_finding(
                         title=triaged.title,
                         severity=triaged.severity,
@@ -98,4 +133,9 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
                 db.commit()
             raise
 
-    return {"task_id": task_id, "findings": findings_count, "module": monitor.module_key}
+    return {
+        "task_id": task_id,
+        "findings": findings_count,  # yeni olusturulan
+        "updated": updated_count,  # tekrar gorulup guncellenen
+        "module": monitor.module_key,
+    }

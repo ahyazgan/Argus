@@ -66,7 +66,9 @@ class FindingOut(BaseModel):
     source: str
     asset_value: str
     raw_data: dict
+    seen_count: int
     detected_at: datetime
+    last_seen_at: datetime
 
     model_config = {"from_attributes": True}
 

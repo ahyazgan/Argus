@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.plans import PLANS, PlanTier, module_limit_for
 from app.core.security import hash_password, verify_password
-from app.core.utils import slugify
+from app.core.utils import finding_fingerprint, severity_at_least, slugify
 from app.modules.catalog import CATALOG, VALID_MODULE_KEYS
 from app.modules.darkweb.analyzer import heuristic as darkweb_heuristic
 from app.modules.darkweb.collectors import DemoLeakCollector
@@ -347,3 +347,26 @@ def test_allowed_scan_intervals():
     assert 15 in ALLOWED_SCAN_INTERVALS
     assert 1440 in ALLOWED_SCAN_INTERVALS
     assert 7 not in ALLOWED_SCAN_INTERVALS
+
+
+# --- Bulgu dedup (parmak izi) + bildirim esigi ---
+
+def test_finding_fingerprint_is_deterministic_and_distinct():
+    mid = "11111111-1111-1111-1111-111111111111"
+    raw = {"candidate_domain": "markam-bahis.com", "category_hint": "gambling"}
+    fp1 = finding_fingerprint("illegal_site", mid, raw)
+    fp2 = finding_fingerprint("illegal_site", mid, dict(reversed(list(raw.items()))))
+    assert fp1 == fp2  # anahtar sirasi onemsiz (kanonik)
+    # Farkli ham veri -> farkli parmak izi
+    assert fp1 != finding_fingerprint("illegal_site", mid, {**raw, "candidate_domain": "x.com"})
+    # Farkli monitor -> farkli parmak izi
+    assert fp1 != finding_fingerprint("illegal_site", "22222222-2222-2222-2222-222222222222", raw)
+
+
+def test_severity_at_least():
+    assert severity_at_least("high", "medium") is True
+    assert severity_at_least("medium", "medium") is True
+    assert severity_at_least("low", "medium") is False
+    assert severity_at_least("critical", "info") is True
+    # bilinmeyen deger -> bildir (True)
+    assert severity_at_least("garip", "high") is True

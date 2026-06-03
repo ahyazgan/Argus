@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_enabled: bool = False
 
+    # Bildirim esigi: bu onem seviyesi ve uzerindeki YENI bulgularda bildirim gonderilir
+    # (info|low|medium|high|critical). Periyodik taramalarda tekrar eden bulgular bildirilmez.
+    notify_min_severity: str = "info"
+
     # SMTP / bildirim
     smtp_host: str = ""
     smtp_port: int = 587
