@@ -7,6 +7,13 @@ type Settings = {
   organization_name: string;
   webhook_url: string | null;
   slack_webhook_url: string | null;
+  notify_email: string | null;
+  github_repo: string | null;
+  has_github_token: boolean;
+  jira_base_url: string | null;
+  jira_email: string | null;
+  jira_project_key: string | null;
+  has_jira_token: boolean;
   has_api_key: boolean;
 };
 
@@ -14,6 +21,13 @@ export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [webhook, setWebhook] = useState("");
   const [slack, setSlack] = useState("");
+  const [email, setEmail] = useState("");
+  const [ghRepo, setGhRepo] = useState("");
+  const [ghToken, setGhToken] = useState("");
+  const [jiraUrl, setJiraUrl] = useState("");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraProject, setJiraProject] = useState("");
+  const [jiraToken, setJiraToken] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -23,6 +37,14 @@ export default function SettingsPage() {
     setS(data);
     setWebhook(data.webhook_url || "");
     setSlack(data.slack_webhook_url || "");
+    setEmail(data.notify_email || "");
+    setGhRepo(data.github_repo || "");
+    setJiraUrl(data.jira_base_url || "");
+    setJiraEmail(data.jira_email || "");
+    setJiraProject(data.jira_project_key || "");
+    // Token'lar sunucudan donmez; kutular bos baslar (girilirse guncellenir)
+    setGhToken("");
+    setJiraToken("");
   }
 
   useEffect(() => {
@@ -36,7 +58,17 @@ export default function SettingsPage() {
     try {
       await api("/settings", {
         method: "PUT",
-        body: { webhook_url: webhook, slack_webhook_url: slack },
+        body: {
+          webhook_url: webhook,
+          slack_webhook_url: slack,
+          notify_email: email,
+          github_repo: ghRepo,
+          github_token: ghToken || undefined,
+          jira_base_url: jiraUrl,
+          jira_email: jiraEmail,
+          jira_project_key: jiraProject,
+          jira_token: jiraToken || undefined,
+        },
       });
       setMsg("Ayarlar kaydedildi.");
       await load();
@@ -81,6 +113,63 @@ export default function SettingsPage() {
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
           />
         </div>
+        <div>
+          <label className="text-sm text-slate-400">E-posta (bildirim alıcısı)</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="guvenlik@firma.com"
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+          <p className="mt-1 text-xs text-slate-500">SMTP sunucu ayarları .env'de tanımlı olmalıdır.</p>
+        </div>
+
+        <h2 className="pt-2 font-semibold">GitHub Issues</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <input
+            value={ghRepo}
+            onChange={(e) => setGhRepo(e.target.value)}
+            placeholder="owner/repo"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+          <input
+            type="password"
+            value={ghToken}
+            onChange={(e) => setGhToken(e.target.value)}
+            placeholder={s?.has_github_token ? "Token tanımlı (değiştirmek için yazın)" : "GitHub token (repo izni)"}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+        </div>
+
+        <h2 className="pt-2 font-semibold">Jira</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <input
+            value={jiraUrl}
+            onChange={(e) => setJiraUrl(e.target.value)}
+            placeholder="https://firma.atlassian.net"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+          <input
+            value={jiraProject}
+            onChange={(e) => setJiraProject(e.target.value)}
+            placeholder="Proje anahtarı (örn. SEC)"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+          <input
+            value={jiraEmail}
+            onChange={(e) => setJiraEmail(e.target.value)}
+            placeholder="jira-kullanici@firma.com"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+          <input
+            type="password"
+            value={jiraToken}
+            onChange={(e) => setJiraToken(e.target.value)}
+            placeholder={s?.has_jira_token ? "Token tanımlı (değiştirmek için yazın)" : "Jira API token"}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+        </div>
+
         <button className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold hover:bg-sky-500">
           Kaydet
         </button>

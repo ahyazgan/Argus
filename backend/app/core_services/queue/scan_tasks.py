@@ -15,7 +15,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.sync_db import SyncSessionLocal
 from app.core.utils import finding_fingerprint, severity_at_least
-from app.core_services.notifications.engine import notify_finding
+from app.core_services.notifications.engine import OutputChannels, notify_finding
 from app.core_services.queue.celery_app import celery_app
 from app.models.finding import Finding, FindingSeverity
 from app.models.monitor import Monitor
@@ -30,6 +30,23 @@ def _to_severity(value: str) -> FindingSeverity:
         return FindingSeverity(value)
     except ValueError:
         return FindingSeverity.MEDIUM
+
+
+def _channels_for(org: Organization | None) -> OutputChannels:
+    """Kurumun yapilandirilmis cikti kanallarini toplar (None => bos kanal seti)."""
+    if org is None:
+        return OutputChannels()
+    return OutputChannels(
+        webhook_url=org.webhook_url,
+        slack_webhook_url=org.slack_webhook_url,
+        github_repo=org.github_repo,
+        github_token=org.github_token,
+        jira_base_url=org.jira_base_url,
+        jira_email=org.jira_email,
+        jira_token=org.jira_token,
+        jira_project_key=org.jira_project_key,
+        email_to=org.notify_email,
+    )
 
 
 @celery_app.task(name="core.run_module_scan")
@@ -60,6 +77,7 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
         try:
             scan_results = asyncio.run(module.scan(monitor))
             org = db.get(Organization, monitor.organization_id)
+            channels = _channels_for(org)
 
             for result in scan_results:
                 triaged = module.analyze(result, monitor)
@@ -106,17 +124,16 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
 
                 # Bildirim: yalnizca YENI ve esik (notify_min_severity) ustu bulgular icin
                 if (
-                    org
-                    and (org.webhook_url or org.slack_webhook_url)
+                    channels.any_configured()
                     and severity_at_least(triaged.severity, settings.notify_min_severity)
                 ):
                     notify_finding(
                         title=triaged.title,
                         severity=triaged.severity,
                         summary=triaged.summary,
+                        recommendation=triaged.recommendation,
                         asset_value=result.asset_value,
-                        webhook_url=org.webhook_url,
-                        slack_webhook_url=org.slack_webhook_url,
+                        channels=channels,
                     )
 
             task.status = TaskStatus.DONE

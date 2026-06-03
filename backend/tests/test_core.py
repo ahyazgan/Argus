@@ -370,3 +370,32 @@ def test_severity_at_least():
     assert severity_at_least("critical", "info") is True
     # bilinmeyen deger -> bildir (True)
     assert severity_at_least("garip", "high") is True
+
+
+# --- Cikti kanallari: GitHub / Jira payload kuruculari ---
+
+def test_github_issue_payload():
+    from app.core_services.notifications.engine import github_issue_payload
+    p = github_issue_payload("Parola sizintisi", "high", "ozet", "hemen sifirla", "ornek.com")
+    assert p["title"].startswith("[Argus]")
+    assert "ornek.com" in p["body"]
+    assert "hemen sifirla" in p["body"]
+    assert "severity:high" in p["labels"]
+
+
+def test_jira_issue_payload():
+    from app.core_services.notifications.engine import jira_issue_payload
+    p = jira_issue_payload("SEC", "Acik servis", "critical", "ozet", None, "ornek.com:6379")
+    f = p["fields"]
+    assert f["project"]["key"] == "SEC"
+    assert f["summary"].startswith("[Argus]")
+    assert f["priority"]["name"] == "Highest"  # critical -> Highest
+    assert "ornek.com:6379" in f["description"]
+
+
+def test_output_channels_any_configured():
+    from app.core_services.notifications.engine import OutputChannels
+    assert OutputChannels().any_configured() is False
+    assert OutputChannels(slack_webhook_url="x").any_configured() is True
+    assert OutputChannels(github_repo="o/r", github_token="t").any_configured() is True
+    assert OutputChannels(github_repo="o/r").any_configured() is False  # token eksik

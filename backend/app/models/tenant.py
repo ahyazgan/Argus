@@ -24,6 +24,16 @@ class Organization(Base, TimestampMixin):
     # Bildirim kanallari (Slack/webhook) - yeni bulguda tetiklenir
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     slack_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # E-posta bildirimi (adres bossa atlanir; SMTP ayarlari da gereklidir)
+    notify_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # GitHub Issues cikti kanali
+    github_repo: Mapped[str | None] = mapped_column(String(140), nullable=True)  # "owner/repo"
+    github_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Jira cikti kanali
+    jira_base_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    jira_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    jira_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    jira_project_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # Dis entegrasyon (REST API) icin API anahtari
     api_key: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
 
