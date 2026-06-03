@@ -47,7 +47,7 @@ CATALOG: list[ModuleMeta] = [
         description="Fiyat, urun, ise alim takibi",
         category="competitor",
         asset_types=["domain", "company"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="financial_crime",
@@ -63,7 +63,7 @@ CATALOG: list[ModuleMeta] = [
         description="Fake haber, bot hesap, manipulasyon",
         category="disinformation",
         asset_types=["brand", "keyword"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="due_diligence",
@@ -71,7 +71,7 @@ CATALOG: list[ModuleMeta] = [
         description="Sirket risk, mahkeme, icra takibi",
         category="due_diligence",
         asset_types=["company"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="ai_testing",
@@ -79,7 +79,7 @@ CATALOG: list[ModuleMeta] = [
         description="Prompt injection, model guvenligi",
         category="ai_testing",
         asset_types=["endpoint"],
-        enabled=False,
+        enabled=True,
     ),
 ]
 

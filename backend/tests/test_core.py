@@ -15,6 +15,12 @@ from app.modules.brand_protection.analyzer import heuristic as brand_heuristic
 from app.modules.brand_protection.collectors import LookalikeDomainCollector
 from app.modules.financial_crime.analyzer import heuristic as financial_heuristic
 from app.modules.financial_crime.collectors import DemoFinancialSignalCollector
+from app.modules.competitor_intel.analyzer import heuristic as competitor_heuristic
+from app.modules.disinformation.analyzer import heuristic as disinfo_heuristic
+from app.modules.due_diligence.analyzer import heuristic as dd_heuristic
+from app.modules.ai_testing.analyzer import heuristic as ai_heuristic
+from app.modules import load_modules
+from app.modules.base import all_module_keys
 
 
 def test_slugify_turkish():
@@ -37,15 +43,18 @@ def test_plan_limits():
     assert set(PLANS.keys()) == set(PlanTier)
 
 
-def test_catalog_has_live_modules():
+def test_catalog_all_modules_live():
+    # Tum katalog (9 modul) artik canli
     live = {m.key for m in CATALOG if m.enabled}
-    assert "darkweb" in live
-    assert "illegal_site" in live  # ikinci canli modul
-    assert "security_scan" in live  # ucuncu canli modul
-    assert "brand_protection" in live  # dorduncu canli modul
-    assert "financial_crime" in live  # besinci canli modul
-    assert "darkweb" in VALID_MODULE_KEYS
+    assert live == VALID_MODULE_KEYS
     assert len(CATALOG) == 9  # gorseldeki 9 modul
+
+
+def test_all_modules_register():
+    """load_modules() tum katalog modullerini kayit defterine eklemeli."""
+    load_modules()
+    registered = set(all_module_keys())
+    assert registered == VALID_MODULE_KEYS
 
 
 def test_darkweb_heuristic_password_leak_is_high():
@@ -194,3 +203,88 @@ def test_financial_signal_collector_is_deterministic():
     assert len(recs) >= 1
     assert all("signal_type" in r for r in recs)
     assert c.collect("wallet", "0xabc") == recs  # deterministik
+
+
+def test_competitor_heuristic_new_product_is_medium():
+    res = competitor_heuristic(
+        {"change_type": "new_product", "product": "v2", "competitor": "RakipAS"},
+        "RakipAS",
+        "company",
+    )
+    assert res.severity == "medium"
+
+
+def test_competitor_heuristic_price_drop_is_medium():
+    res = competitor_heuristic(
+        {"change_type": "price_change", "direction": "dusurdu", "percent": 25,
+         "competitor": "RakipAS"},
+        "RakipAS",
+        "company",
+    )
+    assert res.severity == "medium"
+
+
+def test_disinfo_heuristic_coordinated_bots_is_high():
+    res = disinfo_heuristic(
+        {"signal_type": "coordinated_bots", "account_count": 300, "platform": "X",
+         "subject": "Markam"},
+        "Markam",
+        "brand",
+    )
+    assert res.severity == "high"
+
+
+def test_disinfo_heuristic_impersonation_is_medium():
+    res = disinfo_heuristic(
+        {"signal_type": "impersonation_account", "handle": "@markam_resmi", "platform": "X",
+         "subject": "Markam"},
+        "Markam",
+        "brand",
+    )
+    assert res.severity == "medium"
+
+
+def test_dd_heuristic_bankruptcy_is_high():
+    res = dd_heuristic(
+        {"record_type": "bankruptcy", "status": "konkordato", "company": "ACME"},
+        "ACME",
+        "company",
+    )
+    assert res.severity == "high"
+    assert "konkordato" in res.summary
+
+
+def test_dd_heuristic_litigation_is_medium():
+    res = dd_heuristic(
+        {"record_type": "litigation", "case_no": "2024/1234", "role": "davali", "company": "ACME"},
+        "ACME",
+        "company",
+    )
+    assert res.severity == "medium"
+
+
+def test_ai_heuristic_data_leakage_is_critical():
+    res = ai_heuristic(
+        {"vuln_type": "data_leakage", "endpoint": "https://api.ornek.com/chat"},
+        "https://api.ornek.com/chat",
+        "endpoint",
+    )
+    assert res.severity == "critical"
+
+
+def test_ai_heuristic_prompt_injection_is_high():
+    res = ai_heuristic(
+        {"vuln_type": "prompt_injection", "endpoint": "https://api.ornek.com/chat"},
+        "https://api.ornek.com/chat",
+        "endpoint",
+    )
+    assert res.severity == "high"
+
+
+def test_ai_heuristic_no_rate_limit_is_low():
+    res = ai_heuristic(
+        {"vuln_type": "no_rate_limit", "endpoint": "https://api.ornek.com/chat"},
+        "https://api.ornek.com/chat",
+        "endpoint",
+    )
+    assert res.severity == "low"

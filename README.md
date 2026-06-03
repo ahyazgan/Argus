@@ -6,8 +6,9 @@ Ortak bir çekirdeği (auth, görev kuyruğu, Claude AI motoru, bildirim, ödeme
 müşteriye göre açılıp kapanan modüllerden ve tek tip bir çıktı katmanından oluşur.
 
 Bu repo, mimariyi uçtan uca kanıtlayan bir **dikey dilim (MVP)** içerir:
-ortak çekirdek + **5 canlı modül** (Dark web izleme, Yasadışı site tespiti,
-Güvenlik tarama, Marka koruma, Finansal suç tespiti) + dashboard + PDF/REST çıktısı.
+ortak çekirdek + **9 canlı modül** (kataloğun tamamı: Dark web izleme, Yasadışı site
+tespiti, Güvenlik tarama, Marka koruma, Finansal suç tespiti, Rakip istihbarat,
+Dezenformasyon tespiti, Due diligence, AI sistem testi) + dashboard + PDF/REST çıktısı.
 Modüller ortak, modülden-bağımsız bir tarama
 motorunu ve genel API'yi (`/api/v1/m/{module_key}/...`) paylaşır.
 
@@ -20,12 +21,15 @@ Ortak çekirdek (core_services/)        Modüller (modules/)            Çıktı
 ├─ OSINT toplayıcı (osint/)            ├─ base.py  (Module ABC +      ├─ Dashboard (Next.js)
 ├─ Claude AI motoru (claude_engine/)   │           kayıt defteri)     ├─ PDF rapor (WeasyPrint)
 ├─ Async kuyruk (queue/ — Celery)      ├─ catalog.py (9 modül)        ├─ REST API (FastAPI)
-│   + genel tarama görevi              ├─ darkweb/        ← CANLI     └─ Webhook / Slack
-├─ Bildirim (notifications/)           ├─ illegal_site/   ← CANLI
-└─ Multi-tenant auth (core/)           ├─ security_scan/  ← CANLI
+│   + genel tarama görevi              ├─ darkweb/          ← CANLI   └─ Webhook / Slack
+├─ Bildirim (notifications/)           ├─ illegal_site/     ← CANLI
+└─ Multi-tenant auth (core/)           ├─ security_scan/    ← CANLI
                                        ├─ brand_protection/ ← CANLI
                                        ├─ financial_crime/  ← CANLI
-                                       └─ (diğer 4 "yakında")
+                                       ├─ competitor_intel/ ← CANLI
+                                       ├─ disinformation/   ← CANLI
+                                       ├─ due_diligence/    ← CANLI
+                                       └─ ai_testing/       ← CANLI
 ```
 
 - **Genişleme:** Yeni bir modül = `modules/<ad>/` (`collectors.py` + `analyzer.py` +
@@ -114,7 +118,7 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 
 ## Yol haritası (sonraki dilimler)
 
-- Diğer 4 modül (Rakip istihbarat, Dezenformasyon tespiti, Due diligence, …) — aynı çekirdeğe takılır
+- ~~Kataloğun 9 modülü~~ — **tamamlandı:** 9/9 modül canlı, hepsi aynı çekirdeğe takılı
 - Gerçek Stripe webhook'ları + faturalandırma
 - Jira/GitHub ticket ve BTK/kamu API çıktı kanalları
 - Zamanlanmış (periyodik) taramalar (Celery beat)
