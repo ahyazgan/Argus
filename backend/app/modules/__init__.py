@@ -17,5 +17,6 @@ def load_modules() -> None:
     from app.modules.darkweb import module as _darkweb  # noqa: F401
     from app.modules.illegal_site import module as _illegal  # noqa: F401
     from app.modules.security_scan import module as _security  # noqa: F401
+    from app.modules.brand_protection import module as _brand  # noqa: F401
 
     _loaded = True

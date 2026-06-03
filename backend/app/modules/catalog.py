@@ -39,7 +39,7 @@ CATALOG: list[ModuleMeta] = [
         description="Taklit site, logo korsanligi, domain izleme",
         category="brand",
         asset_types=["domain", "brand"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="competitor_intel",

@@ -11,6 +11,8 @@ from app.modules.illegal_site.analyzer import heuristic as illegal_heuristic
 from app.modules.illegal_site.collectors import SuspiciousSiteCollector
 from app.modules.security_scan.analyzer import heuristic as security_heuristic
 from app.modules.security_scan.collectors import SurfaceProbeCollector
+from app.modules.brand_protection.analyzer import heuristic as brand_heuristic
+from app.modules.brand_protection.collectors import LookalikeDomainCollector
 
 
 def test_slugify_turkish():
@@ -38,6 +40,7 @@ def test_catalog_has_live_modules():
     assert "darkweb" in live
     assert "illegal_site" in live  # ikinci canli modul
     assert "security_scan" in live  # ucuncu canli modul
+    assert "brand_protection" in live  # dorduncu canli modul
     assert "darkweb" in VALID_MODULE_KEYS
     assert len(CATALOG) == 9  # gorseldeki 9 modul
 
@@ -113,3 +116,42 @@ def test_surface_probe_collector_is_deterministic():
     assert len(recs) >= 1
     assert all("issue_type" in r for r in recs)
     assert c.collect("domain", "ornek.com") == recs  # deterministik
+
+
+def test_brand_heuristic_registered_with_mx_is_high():
+    res = brand_heuristic(
+        {"variant_domain": "markam-login.com", "brand": "markam", "technique": "combosquat",
+         "registered": True, "has_mx": True},
+        "markam.com",
+        "brand",
+    )
+    assert res.severity == "high"
+    assert "markam-login.com" in res.title
+
+
+def test_brand_heuristic_registered_no_mx_is_medium():
+    res = brand_heuristic(
+        {"variant_domain": "markam.net", "brand": "markam", "technique": "tld_swap",
+         "registered": True, "has_mx": False},
+        "markam.com",
+        "brand",
+    )
+    assert res.severity == "medium"
+
+
+def test_brand_heuristic_unregistered_is_low():
+    res = brand_heuristic(
+        {"variant_domain": "markma.com", "brand": "markam", "technique": "typosquat",
+         "registered": False, "has_mx": False},
+        "markam.com",
+        "brand",
+    )
+    assert res.severity == "low"
+
+
+def test_lookalike_collector_is_deterministic():
+    c = LookalikeDomainCollector()
+    recs = c.collect("brand", "markam")
+    assert len(recs) >= 1
+    assert all("variant_domain" in r and "technique" in r for r in recs)
+    assert c.collect("brand", "markam") == recs  # deterministik
