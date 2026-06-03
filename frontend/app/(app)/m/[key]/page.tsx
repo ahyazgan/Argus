@@ -44,12 +44,20 @@ type Finding = {
   id: string;
   title: string;
   severity: string;
+  status: string;
   summary: string | null;
   recommendation: string | null;
   source: string;
   asset_value: string;
   seen_count: number;
 };
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "new", label: "Yeni" },
+  { value: "triaged", label: "İncelendi" },
+  { value: "resolved", label: "Çözüldü" },
+  { value: "false_positive", label: "Hatalı alarm" },
+];
 
 const SEV_COLOR: Record<string, string> = {
   critical: "bg-red-500/20 text-red-300",
@@ -152,6 +160,16 @@ export default function ModulePage() {
         body: { scan_interval_minutes: value },
       });
       await loadData();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function setFindingStatus(id: string, status: string) {
+    setErr("");
+    try {
+      await api(`/findings/${id}`, { method: "PATCH", body: { status } });
+      setFindings((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
     } catch (e: any) {
       setErr(e.message);
     }
@@ -340,7 +358,12 @@ export default function ModulePage() {
             <p className="text-sm text-slate-400">Bulgu yok. Bir monitör için “Tara”ya basın.</p>
           )}
           {findings.map((f) => (
-            <div key={f.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+            <div
+              key={f.id}
+              className={`rounded-lg border border-slate-800 bg-slate-900 p-4 ${
+                f.status === "resolved" || f.status === "false_positive" ? "opacity-50" : ""
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${
@@ -355,7 +378,19 @@ export default function ModulePage() {
                     {f.seen_count}× görüldü
                   </span>
                 )}
-                <span className="ml-auto text-xs text-slate-500">{f.source}</span>
+                <select
+                  value={f.status}
+                  onChange={(e) => setFindingStatus(f.id, e.target.value)}
+                  title="Bulgu durumu"
+                  className="ml-auto rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-500">{f.source}</span>
               </div>
               {f.summary && <p className="mt-2 text-sm text-slate-300">{f.summary}</p>}
               {f.recommendation && (
