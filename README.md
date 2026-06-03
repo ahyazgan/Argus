@@ -1,5 +1,7 @@
 # Argus Intelligence
 
+![CI](https://github.com/ahyazgan/Argus/actions/workflows/ci.yml/badge.svg)
+
 **Tek platform — sonsuz modül — bir abonelik.** OSINT & tehdit istihbaratı SaaS platformu.
 
 Ortak bir çekirdeği (auth, görev kuyruğu, Claude AI motoru, bildirim, ödeme) paylaşan,
@@ -67,8 +69,9 @@ Servisler:
 - Frontend: http://localhost:3000
 - PostgreSQL: localhost:5432 · Redis: localhost:6379
 
-> Tablolar açılışta otomatik oluşturulur (`create_all`). Üretim için Alembic hazırdır:
-> `docker compose exec backend alembic revision --autogenerate -m "init" && alembic upgrade head`.
+> Tablolar açılışta otomatik oluşturulur (`create_all`). Üretim için Alembic baseline'ı
+> hazırdır (`alembic/versions/0001_initial.py`): `docker compose exec backend alembic upgrade head`.
+> Sonraki şema değişikliklerinde `alembic revision --autogenerate -m "..."` kullanın.
 
 ---
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import get_db
 from app.core.deps import get_subscription
-from app.core.plans import PLANS, PlanTier, module_limit_for
+from app.core.plans import PLANS, module_limit_for
 from app.models.subscription import Subscription
 from app.modules.catalog import CATALOG, CATALOG_BY_KEY
 from app.schemas.module import ModuleOut, SubscriptionOut, ToggleModuleRequest
