@@ -31,6 +31,7 @@ class SettingsOut(BaseModel):
     has_jira_token: bool
     gov_report_url: str | None
     has_gov_report_token: bool
+    report_schedule: str
     has_api_key: bool
 
 
@@ -46,6 +47,7 @@ class SettingsUpdate(BaseModel):
     jira_project_key: str | None = None
     gov_report_url: str | None = None
     gov_report_token: str | None = None
+    report_schedule: str | None = None  # none | daily | weekly
 
 
 class ApiKeyOut(BaseModel):
@@ -72,6 +74,7 @@ def _view(org: Organization) -> SettingsOut:
         has_jira_token=bool(org.jira_token),
         gov_report_url=org.gov_report_url,
         has_gov_report_token=bool(org.gov_report_token),
+        report_schedule=org.report_schedule,
         has_api_key=bool(org.api_key),
     )
 
@@ -116,6 +119,8 @@ async def update_settings(
         org.gov_report_url = payload.gov_report_url or None
     if payload.gov_report_token:
         org.gov_report_token = payload.gov_report_token
+    if payload.report_schedule is not None and payload.report_schedule in ("none", "daily", "weekly"):
+        org.report_schedule = payload.report_schedule
     record_audit(
         db,
         organization_id=tenant_id,

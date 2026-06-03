@@ -15,9 +15,11 @@ from sqlalchemy import select
 
 from app.core.sync_db import SyncSessionLocal
 from app.core_services.queue.celery_app import celery_app
-from app.core_services.queue.scheduling import select_due_monitors
+from app.core_services.queue.scheduling import is_report_due, select_due_monitors
+from app.models.finding import Finding
 from app.models.monitor import Monitor
 from app.models.task import Task, TaskStatus
+from app.models.tenant import Organization
 
 
 @celery_app.task(name="core.scan_due_monitors")
@@ -62,3 +64,47 @@ def scan_due_monitors() -> dict:
         db.commit()
 
     return {"dispatched": dispatched, "at": now.isoformat()}
+
+
+@celery_app.task(name="core.send_scheduled_reports")
+def send_scheduled_reports() -> dict:
+    """Zamanlanmis (gunluk/haftalik) PDF raporlari e-posta ile gonderir."""
+    # Geç import: weasyprint/notifications agir bagimliliklar
+    from app.core_services.notifications.engine import send_email_with_attachment
+    from app.outputs.pdf import render_findings_pdf
+
+    now = datetime.now(timezone.utc)
+    sent = 0
+    with SyncSessionLocal() as db:
+        orgs = db.execute(select(Organization)).scalars().all()
+        for org in orgs:
+            if not org.notify_email or not is_report_due(
+                org.report_schedule, org.last_report_at, now
+            ):
+                continue
+            findings = (
+                db.execute(
+                    select(Finding)
+                    .where(Finding.organization_id == org.id)
+                    .order_by(Finding.detected_at.desc())
+                )
+                .scalars()
+                .all()
+            )
+            try:
+                pdf = render_findings_pdf(org.name, findings)
+                ok = send_email_with_attachment(
+                    org.notify_email,
+                    f"[Argus] {org.report_schedule} rapor - {now.date().isoformat()}",
+                    "Ekte zamanlanmis Argus istihbarat raporunuz yer almaktadir.",
+                    "argus-rapor.pdf",
+                    pdf,
+                )
+            except Exception:
+                ok = False
+            # Basarisiz olsa bile last_report_at ilerlet: her dakika tekrar denemesin
+            org.last_report_at = now
+            if ok:
+                sent += 1
+        db.commit()
+    return {"sent": sent, "at": now.isoformat()}

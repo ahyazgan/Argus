@@ -45,3 +45,15 @@ def select_due_monitors(monitors: Iterable[_MonitorLike], now: datetime) -> list
         for m in monitors
         if m.is_active and is_due(m.scan_interval_minutes, m.last_scanned_at, now)
     ]
+
+
+# Zamanlanmis PDF rapor araliklari (dakika)
+REPORT_INTERVALS: dict[str, int] = {"daily": 1440, "weekly": 10080}
+
+
+def is_report_due(schedule: str | None, last_report_at: datetime | None, now: datetime) -> bool:
+    """Bir kurumun zamanlanmis raporunun simdi gonderilmesi gerekip gerekmedigini soyler."""
+    interval = REPORT_INTERVALS.get(schedule or "none")
+    if interval is None:
+        return False  # "none" / bilinmeyen => rapor yok
+    return is_due(interval, last_report_at, now)

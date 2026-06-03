@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://redis:6379/1"
     # Zamanlanmis tarama dispatcher'inin (Celery beat) calisma sikligi (saniye)
     scan_beat_interval_seconds: int = 60
+    # Zamanlanmis rapor dispatcher'inin calisma sikligi (saniye; varsayilan saatlik)
+    report_beat_interval_seconds: int = 3600
 
     # JWT
     jwt_secret: str = "change-me-in-production-please"

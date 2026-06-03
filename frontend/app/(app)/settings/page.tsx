@@ -16,6 +16,7 @@ type Settings = {
   has_jira_token: boolean;
   gov_report_url: string | null;
   has_gov_report_token: boolean;
+  report_schedule: string;
   has_api_key: boolean;
 };
 
@@ -32,6 +33,7 @@ export default function SettingsPage() {
   const [jiraToken, setJiraToken] = useState("");
   const [govUrl, setGovUrl] = useState("");
   const [govToken, setGovToken] = useState("");
+  const [reportSchedule, setReportSchedule] = useState("none");
   const [apiKey, setApiKey] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -47,6 +49,7 @@ export default function SettingsPage() {
     setJiraEmail(data.jira_email || "");
     setJiraProject(data.jira_project_key || "");
     setGovUrl(data.gov_report_url || "");
+    setReportSchedule(data.report_schedule || "none");
     // Token'lar sunucudan donmez; kutular bos baslar (girilirse guncellenir)
     setGhToken("");
     setJiraToken("");
@@ -76,6 +79,7 @@ export default function SettingsPage() {
           jira_token: jiraToken || undefined,
           gov_report_url: govUrl,
           gov_report_token: govToken || undefined,
+          report_schedule: reportSchedule,
         },
       });
       setMsg("Ayarlar kaydedildi.");
@@ -198,6 +202,23 @@ export default function SettingsPage() {
             placeholder={s?.has_gov_report_token ? "Token tanımlı (değiştirmek için yazın)" : "Bearer token (opsiyonel)"}
             className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
           />
+        </div>
+
+        <h2 className="pt-2 font-semibold">Zamanlanmış rapor</h2>
+        <div>
+          <label className="text-sm text-slate-400">PDF raporu e-posta ile gönder</label>
+          <select
+            value={reportSchedule}
+            onChange={(e) => setReportSchedule(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500 sm:w-60"
+          >
+            <option value="none">Kapalı</option>
+            <option value="daily">Günlük</option>
+            <option value="weekly">Haftalık</option>
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            Yukarıdaki bildirim e-postası adresine gönderilir (SMTP gereklidir).
+          </p>
         </div>
 
         <button className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold hover:bg-sky-500">

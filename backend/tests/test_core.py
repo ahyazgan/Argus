@@ -399,3 +399,17 @@ def test_output_channels_any_configured():
     assert OutputChannels(slack_webhook_url="x").any_configured() is True
     assert OutputChannels(github_repo="o/r", github_token="t").any_configured() is True
     assert OutputChannels(github_repo="o/r").any_configured() is False  # token eksik
+
+
+# --- Zamanlanmis rapor vadesi ---
+
+def test_is_report_due():
+    from app.core_services.queue.scheduling import is_report_due
+    base = datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc)
+    assert is_report_due("none", None, base) is False
+    assert is_report_due(None, None, base) is False
+    assert is_report_due("daily", None, base) is True  # hic gonderilmedi
+    assert is_report_due("daily", base - timedelta(hours=12), base) is False
+    assert is_report_due("daily", base - timedelta(hours=25), base) is True
+    assert is_report_due("weekly", base - timedelta(days=3), base) is False
+    assert is_report_due("weekly", base - timedelta(days=8), base) is True

@@ -224,6 +224,30 @@ def send_email(to_addr: str, subject: str, body: str) -> bool:
         return False
 
 
+def send_email_with_attachment(
+    to_addr: str, subject: str, body: str, filename: str, content: bytes, mime: str = "application/pdf"
+) -> bool:
+    """Ek (orn PDF rapor) iceren e-posta gonderir."""
+    if not settings.smtp_host:
+        return False
+    maintype, _, subtype = mime.partition("/")
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = settings.smtp_from
+    msg["To"] = to_addr
+    msg.set_content(body)
+    msg.add_attachment(content, maintype=maintype, subtype=subtype or "octet-stream", filename=filename)
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as server:
+            server.starttls()
+            if settings.smtp_user:
+                server.login(settings.smtp_user, settings.smtp_password)
+            server.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
 def notify_finding(
     *,
     title: str,

@@ -50,6 +50,8 @@ def upgrade() -> None:
         sa.Column("jira_project_key", sa.String(40), nullable=True),
         sa.Column("gov_report_url", sa.String(500), nullable=True),
         sa.Column("gov_report_token", sa.String(255), nullable=True),
+        sa.Column("report_schedule", sa.String(10), server_default="none", nullable=False),
+        sa.Column("last_report_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("api_key", sa.String(80), nullable=True),
         *_ts_columns(),
     )

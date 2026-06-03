@@ -26,6 +26,10 @@ celery_app.conf.update(
             "task": "core.scan_due_monitors",
             "schedule": float(settings.scan_beat_interval_seconds),
         },
+        "send-scheduled-reports": {
+            "task": "core.send_scheduled_reports",
+            "schedule": float(settings.report_beat_interval_seconds),
+        },
     },
 )
 
