@@ -82,6 +82,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <Link href="/billing" className={linkClass(pathname === "/billing")}>
             <span className="w-4 text-center">⊟</span> Abonelik
           </Link>
+          <Link href="/team" className={linkClass(pathname === "/team")}>
+            <span className="w-4 text-center">⊕</span> Ekip
+          </Link>
           <Link href="/settings" className={linkClass(pathname === "/settings")}>
             <span className="w-4 text-center">⚙</span> Ayarlar
           </Link>

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.subscription import Subscription
-from app.models.user import User
+from app.models.user import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -60,6 +60,23 @@ async def get_subscription(
     if sub is None:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Abonelik bulunamadi")
     return sub
+
+
+def require_role(*allowed: UserRole):
+    """Gecerli kullanicinin rolunu zorunlu kilan bagimlilik fabrikasi.
+
+    Kullanim:  Depends(require_role(UserRole.OWNER, UserRole.ADMIN))
+    """
+
+    async def _guard(user: User = Depends(get_current_user)) -> User:
+        if user.role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu islem icin yetkiniz yok",
+            )
+        return user
+
+    return _guard
 
 
 def require_module(module_key: str):
