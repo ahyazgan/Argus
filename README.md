@@ -124,9 +124,16 @@ API'lerine vurur; ilgili ortam değişkeni yoksa **atlanır** (CI'da varsayılan
 - **Etik/yasal:** Dark web modülü **savunma amaçlıdır** — yalnızca müşterinin *kendi*
   varlıkları için, yasal/halka açık kaynaklardan sızıntı izler. Yasadışı pazar yeri
   tarayıcısı / Tor crawler içermez.
-- **Demo konnektörü** anahtarsız çalışır (deterministik örnek). Gerçek sızıntı/yüzey
-  feed'leri **bağlandı**: `HIBP_API_KEY` (darkweb) ve `SHODAN_API_KEY` (security_scan)
-  ayarlanınca gerçek API çağrısı yapılır; anahtar yoksa demo konnektöre düşülür.
+- **Demo konnektörü** anahtarsız çalışır (deterministik örnek). Konnektör durumu:
+
+  | Modül | Gerçek kaynak | Durum |
+  |---|---|---|
+  | darkweb | HaveIBeenPwned (`HIBP_API_KEY`) | ✅ gerçek API bağlı |
+  | security_scan | Shodan (`SHODAN_API_KEY`) | ✅ gerçek API bağlı |
+  | brand_protection | DNS-over-HTTPS (`BRAND_DNS_CHECK=true`) | ✅ gerçek, anahtarsız |
+  | illegal_site / financial_crime / competitor_intel / disinformation / due_diligence / ai_testing | arama/zincir/scrape/sosyal/sicil/uç-nokta API'leri | ⏳ entegrasyon noktası hazır (stub); sağlayıcı anahtarı gerektirir |
+
+  Anahtar/sağlayıcı yoksa ilgili modül deterministik demo konnektörüne düşer (demo akışı bozulmaz).
 - **Stripe** gerçek akış için hazır: `STRIPE_ENABLED=true` + `STRIPE_SECRET_KEY` +
   `STRIPE_PRICE_*` ile checkout oturumu açılır, `/billing/webhook` imza doğrulayıp
   aboneliği günceller. Kapalıyken stub döner (plan limiti dayatması yine çalışır).

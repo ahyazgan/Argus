@@ -15,8 +15,27 @@ from __future__ import annotations
 
 import hashlib
 
+import httpx
+
 from app.core.config import settings
 from app.core_services.osint.base import Collector
+
+
+def _doh_query(name: str, rtype: str) -> bool:
+    """Google DNS-over-HTTPS ile bir kaydin (A/MX) var olup olmadigini sorgular.
+
+    Anahtarsiz gercek DNS dogrulamasi. Hata/zaman asiminda False doner (akisi bozmaz).
+    """
+    try:
+        resp = httpx.get(
+            "https://dns.google/resolve",
+            params={"name": name, "type": rtype},
+            timeout=8.0,
+        )
+        data = resp.json()
+        return bool(data.get("Answer"))
+    except (httpx.HTTPError, ValueError):
+        return False
 
 # Taklit teknikleri ve uretim icin yardimci havuzlar
 _TECHNIQUES = ["typosquat", "tld_swap", "homoglyph", "combosquat"]
@@ -59,9 +78,15 @@ class LookalikeDomainCollector(Collector):
                 variant = _apply_homoglyph(label, seed >> (i + 1)) + tld
             else:  # typosquat - bir harf tekrari/dusurme
                 variant = _apply_typo(label, seed >> (i + 1)) + tld
-            # Deterministik "kayitli mi / mail kaydi var mi" sinyalleri
-            registered = (seed >> (i + 2)) & 1 == 1
-            has_mx = registered and ((seed >> (i + 3)) & 1 == 1)
+            # Kayitli mi / mail (MX) kaydi var mi:
+            # - brand_dns_check aciksa GERCEK DNS-over-HTTPS sorgusu
+            # - kapaliysa deterministik demo sinyali (test/offline icin)
+            if getattr(settings, "brand_dns_check", False):
+                registered = _doh_query(variant, "A")
+                has_mx = registered and _doh_query(variant, "MX")
+            else:
+                registered = (seed >> (i + 2)) & 1 == 1
+                has_mx = registered and ((seed >> (i + 3)) & 1 == 1)
             records.append(
                 {
                     "source": self.name,

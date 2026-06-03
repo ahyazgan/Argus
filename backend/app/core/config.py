@@ -47,8 +47,19 @@ class Settings(BaseSettings):
     stripe_price_enterprise: str = ""
 
     # OSINT feed API anahtarlari (bos ise ilgili konnektor demo/atlanir)
-    hibp_api_key: str = ""  # HaveIBeenPwned (darkweb)
-    shodan_api_key: str = ""  # Shodan (security_scan)
+    hibp_api_key: str = ""  # HaveIBeenPwned (darkweb) - GERCEK baglandi
+    shodan_api_key: str = ""  # Shodan (security_scan) - GERCEK baglandi
+    # Marka koruma: gercek DNS-over-HTTPS dogrulamasi (anahtarsiz; bayrakla acilir)
+    brand_dns_check: bool = False
+    # Diger modullerin gercek kaynak anahtarlari (saglayici sozlesmesi gerektirir;
+    # bos ise demo konnektore dusulur). Entegrasyon noktalari konnektor stub'larinda.
+    brand_feed_api_key: str = ""  # brand_protection (yeni kayit/WHOIS feed)
+    search_api_key: str = ""  # illegal_site (arama/domain feed)
+    chain_analysis_api_key: str = ""  # financial_crime (zincir analizi/yaptirim)
+    scrape_api_key: str = ""  # competitor_intel (web kazima/fiyat)
+    social_api_key: str = ""  # disinformation (sosyal medya/anlati)
+    court_records_api_key: str = ""  # due_diligence (mahkeme/sicil)
+    ai_probe_api_key: str = ""  # ai_testing (gercek izinli uc nokta testi)
 
     # Bildirim esigi: bu onem seviyesi ve uzerindeki YENI bulgularda bildirim gonderilir
     # (info|low|medium|high|critical). Periyodik taramalarda tekrar eden bulgular bildirilmez.
