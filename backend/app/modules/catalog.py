@@ -23,7 +23,7 @@ CATALOG: list[ModuleMeta] = [
         description="Web/mobil acik tespiti, pentest yuzeyi, bounty",
         category="security",
         asset_types=["domain", "ip", "url"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="illegal_site",

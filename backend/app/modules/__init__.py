@@ -16,5 +16,6 @@ def load_modules() -> None:
     # Canli moduller (catalog'da enabled=True olanlar):
     from app.modules.darkweb import module as _darkweb  # noqa: F401
     from app.modules.illegal_site import module as _illegal  # noqa: F401
+    from app.modules.security_scan import module as _security  # noqa: F401
 
     _loaded = True

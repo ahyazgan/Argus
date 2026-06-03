@@ -6,8 +6,8 @@ Ortak bir çekirdeği (auth, görev kuyruğu, Claude AI motoru, bildirim, ödeme
 müşteriye göre açılıp kapanan modüllerden ve tek tip bir çıktı katmanından oluşur.
 
 Bu repo, mimariyi uçtan uca kanıtlayan bir **dikey dilim (MVP)** içerir:
-ortak çekirdek + **2 canlı modül** (Dark web izleme, Yasadışı site tespiti) +
-dashboard + PDF/REST çıktısı. Modüller ortak, modülden-bağımsız bir tarama
+ortak çekirdek + **3 canlı modül** (Dark web izleme, Yasadışı site tespiti,
+Güvenlik tarama) + dashboard + PDF/REST çıktısı. Modüller ortak, modülden-bağımsız bir tarama
 motorunu ve genel API'yi (`/api/v1/m/{module_key}/...`) paylaşır.
 
 ---
@@ -21,7 +21,8 @@ Ortak çekirdek (core_services/)        Modüller (modules/)            Çıktı
 ├─ Async kuyruk (queue/ — Celery)      ├─ catalog.py (9 modül)        ├─ REST API (FastAPI)
 │   + genel tarama görevi              ├─ darkweb/        ← CANLI     └─ Webhook / Slack
 ├─ Bildirim (notifications/)           ├─ illegal_site/   ← CANLI
-└─ Multi-tenant auth (core/)           └─ (diğer 7 "yakında")
+└─ Multi-tenant auth (core/)           ├─ security_scan/  ← CANLI
+                                       └─ (diğer 6 "yakında")
 ```
 
 - **Genişleme:** Yeni bir modül = `modules/<ad>/` (`collectors.py` + `analyzer.py` +
@@ -110,7 +111,7 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 
 ## Yol haritası (sonraki dilimler)
 
-- Diğer 7 modül (Güvenlik tarama, Marka koruma, Due diligence, …) — aynı çekirdeğe takılır
+- Diğer 6 modül (Marka koruma, Rakip istihbarat, Due diligence, …) — aynı çekirdeğe takılır
 - Gerçek Stripe webhook'ları + faturalandırma
 - Jira/GitHub ticket ve BTK/kamu API çıktı kanalları
 - Zamanlanmış (periyodik) taramalar (Celery beat)

@@ -9,6 +9,8 @@ from app.modules.darkweb.analyzer import heuristic as darkweb_heuristic
 from app.modules.darkweb.collectors import DemoLeakCollector
 from app.modules.illegal_site.analyzer import heuristic as illegal_heuristic
 from app.modules.illegal_site.collectors import SuspiciousSiteCollector
+from app.modules.security_scan.analyzer import heuristic as security_heuristic
+from app.modules.security_scan.collectors import SurfaceProbeCollector
 
 
 def test_slugify_turkish():
@@ -35,6 +37,7 @@ def test_catalog_has_live_modules():
     live = {m.key for m in CATALOG if m.enabled}
     assert "darkweb" in live
     assert "illegal_site" in live  # ikinci canli modul
+    assert "security_scan" in live  # ucuncu canli modul
     assert "darkweb" in VALID_MODULE_KEYS
     assert len(CATALOG) == 9  # gorseldeki 9 modul
 
@@ -71,3 +74,42 @@ def test_suspicious_site_collector_produces_candidates():
     assert len(recs) >= 1
     assert all("candidate_domain" in r for r in recs)
     assert c.collect("brand", "markam") == recs  # deterministik
+
+
+def test_security_heuristic_exposed_sensitive_service_is_critical():
+    res = security_heuristic(
+        {"issue_type": "exposed_service", "service": "PostgreSQL", "port": 5432,
+         "sensitive": True, "target": "ornek.com"},
+        "ornek.com",
+        "domain",
+    )
+    assert res.severity == "critical"
+    assert "PostgreSQL" in res.title
+
+
+def test_security_heuristic_exposed_admin_panel_is_high():
+    res = security_heuristic(
+        {"issue_type": "exposed_admin_panel", "path": "/admin", "target": "ornek.com"},
+        "ornek.com",
+        "domain",
+    )
+    assert res.severity == "high"
+
+
+def test_security_heuristic_missing_header_is_low():
+    res = security_heuristic(
+        {"issue_type": "missing_security_header", "header": "Content-Security-Policy",
+         "target": "ornek.com"},
+        "ornek.com",
+        "domain",
+    )
+    assert res.severity == "low"
+    assert "Content-Security-Policy" in res.title
+
+
+def test_surface_probe_collector_is_deterministic():
+    c = SurfaceProbeCollector()
+    recs = c.collect("domain", "ornek.com")
+    assert len(recs) >= 1
+    assert all("issue_type" in r for r in recs)
+    assert c.collect("domain", "ornek.com") == recs  # deterministik
