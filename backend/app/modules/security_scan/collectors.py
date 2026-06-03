@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import hashlib
 
+import httpx
+
 from app.core.config import settings
 from app.core_services.osint.base import Collector
 
@@ -80,10 +82,54 @@ class ShodanCollector(Collector):
 
     def collect(self, asset_type: str, asset_value: str) -> list[dict]:
         api_key = getattr(settings, "shodan_api_key", "")
-        if not api_key:
+        # Shodan host lookup yalnizca IP icin; domain/url demo konnektore birakilir
+        if not api_key or asset_type != "ip":
             return []
-        # Gercek cagri burada yapilir (httpx ile). Anahtarsiz demoda devre disi.
-        return []
+        try:
+            resp = httpx.get(
+                f"https://api.shodan.io/shodan/host/{asset_value}",
+                params={"key": api_key},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except (httpx.HTTPError, ValueError):
+            return []  # API hatasi tarama akisini bozmasin
+
+        records: list[dict] = []
+        # Acik servisler/portlar -> exposed_service bulgulari (analyzer ile uyumlu sema)
+        for svc in data.get("data", []) or []:
+            port = svc.get("port")
+            product = svc.get("product") or svc.get("_shodan", {}).get("module", "servis")
+            # Hassas portlar (DB/uzak masaustu) kritik kabul edilir
+            sensitive = port in {3389, 5432, 6379, 9200, 27017, 3306, 1433}
+            records.append(
+                {
+                    "source": self.name,
+                    "asset_type": asset_type,
+                    "asset_value": asset_value,
+                    "target": asset_value,
+                    "issue_type": "exposed_service",
+                    "service": str(product),
+                    "port": port,
+                    "sensitive": sensitive,
+                }
+            )
+        # Shodan'in bildirdigi bilinen zafiyetler (varsa) - bilgi amacli kayit
+        for cve in (data.get("vulns") or [])[:10]:
+            records.append(
+                {
+                    "source": f"{self.name}:vulns",
+                    "asset_type": asset_type,
+                    "asset_value": asset_value,
+                    "target": asset_value,
+                    "issue_type": "exposed_service",
+                    "service": f"Bilinen zafiyet {cve}",
+                    "port": "-",
+                    "sensitive": True,
+                }
+            )
+        return records
 
 
 def get_collectors() -> list[Collector]:

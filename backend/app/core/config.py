@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_enabled: bool = False
+    # Plan kademesi basina Stripe Price ID'leri (checkout icin)
+    stripe_price_starter: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_enterprise: str = ""
+
+    # OSINT feed API anahtarlari (bos ise ilgili konnektor demo/atlanir)
+    hibp_api_key: str = ""  # HaveIBeenPwned (darkweb)
+    shodan_api_key: str = ""  # Shodan (security_scan)
 
     # Bildirim esigi: bu onem seviyesi ve uzerindeki YENI bulgularda bildirim gonderilir
     # (info|low|medium|high|critical). Periyodik taramalarda tekrar eden bulgular bildirilmez.

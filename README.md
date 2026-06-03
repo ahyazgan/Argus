@@ -118,11 +118,14 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 - **Etik/yasal:** Dark web modülü **savunma amaçlıdır** — yalnızca müşterinin *kendi*
   varlıkları için, yasal/halka açık kaynaklardan sızıntı izler. Yasadışı pazar yeri
   tarayıcısı / Tor crawler içermez.
-- **Demo konnektörü** anahtarsız çalışır (deterministik örnek). Gerçek sızıntı feed’leri
-  (HIBP vb.) takılabilir `Collector` olarak `modules/darkweb/collectors.py` içine eklenir.
-- **Stripe** şu an stub (`STRIPE_ENABLED=false`). Plan değiştirme limit dayatmasını gösterir.
-- **Çıktı kanalları:** Dashboard, PDF, REST, Webhook/Slack canlı; Jira/GitHub ve BTK/kamu API
-  arayüzde "yakında" — sonraki dilim.
+- **Demo konnektörü** anahtarsız çalışır (deterministik örnek). Gerçek sızıntı/yüzey
+  feed'leri **bağlandı**: `HIBP_API_KEY` (darkweb) ve `SHODAN_API_KEY` (security_scan)
+  ayarlanınca gerçek API çağrısı yapılır; anahtar yoksa demo konnektöre düşülür.
+- **Stripe** gerçek akış için hazır: `STRIPE_ENABLED=true` + `STRIPE_SECRET_KEY` +
+  `STRIPE_PRICE_*` ile checkout oturumu açılır, `/billing/webhook` imza doğrulayıp
+  aboneliği günceller. Kapalıyken stub döner (plan limiti dayatması yine çalışır).
+- **Çıktı kanalları:** Dashboard, PDF, REST, Webhook/Slack, **GitHub Issues**, **Jira**
+  ve e-posta canlı (kurum ayarlarından yapılandırılır). BTK/kamu API "yakında".
 - **Windows yerel (Docker'sız) çalıştırma:** Celery için `--pool=solo`, WeasyPrint için GTK
   bağımlılıkları gerekir; bu yüzden birincil yol Docker'dır.
 
@@ -133,6 +136,10 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 - ~~Kataloğun 9 modülü~~ — **tamamlandı:** 9/9 modül canlı, hepsi aynı çekirdeğe takılı
 - ~~Zamanlanmış (periyodik) taramalar (Celery beat)~~ — **tamamlandı:** monitör başına
   otomatik tarama sıklığı + `beat` dispatcher (tüm modüller için)
-- Gerçek Stripe webhook'ları + faturalandırma
-- Jira/GitHub ticket ve BTK/kamu API çıktı kanalları
-- Gerçek dark web / sızıntı feed entegrasyonları
+- ~~Bulgu yinelenme önleme (dedup) + bildirim eşiği~~ — **tamamlandı**
+- ~~Jira/GitHub ticket çıktı kanalları + e-posta~~ — **tamamlandı** (BTK/kamu API kaldı)
+- ~~Gerçek Stripe checkout + webhook'ları~~ — **tamamlandı** (kimlik bilgisi gerektirir)
+- ~~Gerçek dark web / sızıntı feed entegrasyonları~~ — **tamamlandı:** HIBP + Shodan
+  (API anahtarı gerektirir; anahtarsız demo konnektör çalışır)
+- CI + Alembic baseline + bağımlılık pinleri — **tamamlandı**
+- Kalan: BTK/kamu API çıktı kanalı, çok kullanıcılı rol yönetimi, gerçek-zamanlı entegrasyon testleri

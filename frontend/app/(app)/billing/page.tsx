@@ -42,8 +42,17 @@ export default function BillingPage() {
     setErr("");
     setMsg("");
     try {
+      const c = await api<{ stripe_enabled: boolean; checkout_url: string | null; message: string }>(
+        "/billing/checkout",
+        { body: { plan: tier } }
+      );
+      if (c.stripe_enabled && c.checkout_url) {
+        // Gerçek ödeme: Stripe Checkout'a yönlendir (plan, webhook ile ödeme sonrası güncellenir)
+        window.location.href = c.checkout_url;
+        return;
+      }
+      // Stub mod: planı yerel olarak hemen değiştir (limit dayatması korunur)
       await api("/billing/change-plan", { body: { plan: tier } });
-      const c = await api<{ message: string }>("/billing/checkout", { body: { plan: tier } });
       setMsg(c.message);
       await load();
     } catch (e: any) {
@@ -89,8 +98,9 @@ export default function BillingPage() {
         })}
       </div>
       <p className="text-xs text-slate-500">
-        Not: Stripe entegrasyonu şu an stub modunda. Gerçek ödeme akışı STRIPE_ENABLED=true ile
-        etkinleşir.
+        Not: STRIPE_ENABLED=true ve STRIPE_PRICE_* ayarlandığında "Bu plana geç" sizi Stripe
+        Checkout'a yönlendirir; ödeme sonrası abonelik webhook ile güncellenir. Aksi halde stub
+        modda plan anında değişir (limit dayatması korunur).
       </p>
     </div>
   );
