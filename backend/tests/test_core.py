@@ -413,3 +413,18 @@ def test_is_report_due():
     assert is_report_due("daily", base - timedelta(hours=25), base) is True
     assert is_report_due("weekly", base - timedelta(days=3), base) is False
     assert is_report_due("weekly", base - timedelta(days=8), base) is True
+
+
+# --- Rate limit saf mantik ---
+
+def test_allow_request_sliding_window():
+    from collections import deque
+    from app.core.middleware import allow_request
+    h: deque[float] = deque()
+    # limit=3, window=60; ilk 3 izinli, 4. reddedilir
+    assert allow_request(h, 100.0, 3, 60.0) is True
+    assert allow_request(h, 100.5, 3, 60.0) is True
+    assert allow_request(h, 101.0, 3, 60.0) is True
+    assert allow_request(h, 101.5, 3, 60.0) is False
+    # Pencere kaydiktan sonra tekrar izinli
+    assert allow_request(h, 170.0, 3, 60.0) is True

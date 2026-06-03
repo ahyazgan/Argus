@@ -63,6 +63,8 @@ class Settings(BaseSettings):
 
     # CORS - frontend kaynagi
     frontend_origin: str = "http://localhost:3000"
+    # Auth uclari icin IP basina dakikalik istek limiti (brute-force korumasi)
+    auth_rate_limit_per_minute: int = 20
 
 
 @lru_cache
