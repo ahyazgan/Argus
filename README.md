@@ -22,6 +22,7 @@ Ortak çekirdek (core_services/)        Modüller (modules/)            Çıktı
 ├─ Claude AI motoru (claude_engine/)   │           kayıt defteri)     ├─ PDF rapor (WeasyPrint)
 ├─ Async kuyruk (queue/ — Celery)      ├─ catalog.py (9 modül)        ├─ REST API (FastAPI)
 │   + genel tarama görevi              ├─ darkweb/          ← CANLI   └─ Webhook / Slack
+│   + zamanlanmış dispatcher (beat)    │
 ├─ Bildirim (notifications/)           ├─ illegal_site/     ← CANLI
 └─ Multi-tenant auth (core/)           ├─ security_scan/    ← CANLI
                                        ├─ brand_protection/ ← CANLI
@@ -78,10 +79,18 @@ Servisler:
 2. **Modüller** sayfasında **Dark web izleme**’yi **Aç** (Starter planı 2 modüle izin verir).
 3. **Dark web izleme** sayfasında bir monitör ekleyin (örn. tip `domain`, değer `ornek.com`).
 4. Monitörde **Tara**’ya basın → Celery görevi arka planda çalışır.
+   Dilerseniz monitörün **Otomatik** sıklığını (15 dk / 1 sa / 6 sa / 24 sa) seçin →
+   Celery **beat** vadesi gelen monitörleri kendiliğinden tarar (manuel tetikleme gerekmez).
 5. Demo konnektör + Claude triyajı bulgular üretir (önem + Türkçe özet + öneri).
 6. **PDF rapor indir** → WeasyPrint ile Türkçe rapor.
 7. **Ayarlar**’da webhook/Slack URL’i tanımlayın → yeni bulguda bildirim gönderilir.
 8. **Abonelik**’te plan limitini test edin (limit aşımı reddedilir).
+
+> **Zamanlanmış taramalar:** `beat` servisi her dakika (`SCAN_BEAT_INTERVAL_SECONDS`)
+> vadesi gelmiş tüm aktif monitörleri tek bir modülden-bağımsız dispatcher
+> (`core.scan_due_monitors`) ile tarar — 9 modülün hepsi için çalışır. Tablo şeması
+> değiştiğinden, mevcut bir veritabanı için Alembic migration’ı çalıştırın (taze DB’de
+> `create_all` yeni kolonları otomatik ekler).
 
 > Aynı akış **Yasadışı site tespiti** modülü için de geçerlidir: Modüller’den açın, sol
 > menüden modüle girin, bir marka/anahtar kelime (örn. `markam`) ekleyip tarayın → kumar/
@@ -119,7 +128,8 @@ slugify, parola hash, plan limitleri, modül katalogu, sezgisel triyaj, demo kon
 ## Yol haritası (sonraki dilimler)
 
 - ~~Kataloğun 9 modülü~~ — **tamamlandı:** 9/9 modül canlı, hepsi aynı çekirdeğe takılı
+- ~~Zamanlanmış (periyodik) taramalar (Celery beat)~~ — **tamamlandı:** monitör başına
+  otomatik tarama sıklığı + `beat` dispatcher (tüm modüller için)
 - Gerçek Stripe webhook'ları + faturalandırma
 - Jira/GitHub ticket ve BTK/kamu API çıktı kanalları
-- Zamanlanmış (periyodik) taramalar (Celery beat)
 - Gerçek dark web / sızıntı feed entegrasyonları

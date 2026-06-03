@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str = "redis://redis:6379/1"
+    # Zamanlanmis tarama dispatcher'inin (Celery beat) calisma sikligi (saniye)
+    scan_beat_interval_seconds: int = 60
 
     # JWT
     jwt_secret: str = "change-me-in-production-please"

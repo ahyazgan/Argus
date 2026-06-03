@@ -1,6 +1,9 @@
 """Cekirdek birim testleri - DB gerektirmez (saf fonksiyonlar)."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
 from app.core.plans import PLANS, PlanTier, module_limit_for
 from app.core.security import hash_password, verify_password
 from app.core.utils import slugify
@@ -21,6 +24,11 @@ from app.modules.due_diligence.analyzer import heuristic as dd_heuristic
 from app.modules.ai_testing.analyzer import heuristic as ai_heuristic
 from app.modules import load_modules
 from app.modules.base import all_module_keys
+from app.core_services.queue.scheduling import (
+    ALLOWED_SCAN_INTERVALS,
+    is_due,
+    select_due_monitors,
+)
 
 
 def test_slugify_turkish():
@@ -288,3 +296,54 @@ def test_ai_heuristic_no_rate_limit_is_low():
         "endpoint",
     )
     assert res.severity == "low"
+
+
+# --- Zamanlanmis tarama (Celery beat dispatcher) saf mantik testleri ---
+
+NOW = datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc)
+
+
+@dataclass
+class _FakeMonitor:
+    is_active: bool = True
+    scan_interval_minutes: int | None = None
+    last_scanned_at: datetime | None = None
+
+
+def test_is_due_manual_never_due():
+    # interval None => sadece manuel, asla otomatik
+    assert is_due(None, None, NOW) is False
+    assert is_due(0, None, NOW) is False
+
+
+def test_is_due_never_scanned_is_due():
+    assert is_due(60, None, NOW) is True
+
+
+def test_is_due_respects_interval():
+    # 60 dk aralik; 30 dk once tarandi => henuz degil
+    assert is_due(60, NOW - timedelta(minutes=30), NOW) is False
+    # tam 60 dk once => vadesi geldi
+    assert is_due(60, NOW - timedelta(minutes=60), NOW) is True
+    # 90 dk once => vadesi gecti
+    assert is_due(60, NOW - timedelta(minutes=90), NOW) is True
+
+
+def test_select_due_monitors_filters_active_and_due():
+    monitors = [
+        _FakeMonitor(scan_interval_minutes=None),  # manuel -> haric
+        _FakeMonitor(scan_interval_minutes=60, last_scanned_at=None),  # hic taranmadi -> dahil
+        _FakeMonitor(scan_interval_minutes=60, last_scanned_at=NOW - timedelta(minutes=10)),  # erken -> haric
+        _FakeMonitor(scan_interval_minutes=15, last_scanned_at=NOW - timedelta(minutes=20)),  # gecti -> dahil
+        _FakeMonitor(is_active=False, scan_interval_minutes=15, last_scanned_at=None),  # pasif -> haric
+    ]
+    due = select_due_monitors(monitors, NOW)
+    assert len(due) == 2
+    assert all(m.is_active and m.scan_interval_minutes for m in due)
+
+
+def test_allowed_scan_intervals():
+    # API/arayuz ile uyumlu izinli araliklar
+    assert 15 in ALLOWED_SCAN_INTERVALS
+    assert 1440 in ALLOWED_SCAN_INTERVALS
+    assert 7 not in ALLOWED_SCAN_INTERVALS

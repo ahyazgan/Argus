@@ -18,7 +18,27 @@ type Monitor = {
   name: string;
   asset_type: string;
   asset_value: string;
+  scan_interval_minutes: number | null;
+  last_scanned_at: string | null;
 };
+
+const SCHEDULE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: "Manuel" },
+  { value: 15, label: "15 dk" },
+  { value: 60, label: "1 saat" },
+  { value: 360, label: "6 saat" },
+  { value: 1440, label: "24 saat" },
+];
+
+function scheduleLabel(min: number | null): string {
+  return SCHEDULE_OPTIONS.find((o) => o.value === min)?.label ?? `${min} dk`;
+}
+
+function lastScanLabel(iso: string | null): string {
+  if (!iso) return "henüz taranmadı";
+  const d = new Date(iso);
+  return `son tarama: ${d.toLocaleString("tr-TR")}`;
+}
 
 type Finding = {
   id: string;
@@ -55,6 +75,7 @@ export default function ModulePage() {
   const [name, setName] = useState("");
   const [assetType, setAssetType] = useState("");
   const [assetValue, setAssetValue] = useState("");
+  const [intervalMin, setIntervalMin] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
   const [scanning, setScanning] = useState<string | null>(null);
@@ -101,7 +122,13 @@ export default function ModulePage() {
     setErr("");
     try {
       await api(`/m/${key}/monitors`, {
-        body: { module_key: key, name, asset_type: assetType, asset_value: assetValue },
+        body: {
+          module_key: key,
+          name,
+          asset_type: assetType,
+          asset_value: assetValue,
+          scan_interval_minutes: intervalMin,
+        },
       });
       setName("");
       setAssetValue("");
@@ -114,6 +141,19 @@ export default function ModulePage() {
   async function removeMonitor(id: string) {
     await api(`/m/${key}/monitors/${id}`, { method: "DELETE" });
     await loadData();
+  }
+
+  async function setSchedule(id: string, value: number | null) {
+    setErr("");
+    try {
+      await api(`/m/${key}/monitors/${id}/schedule`, {
+        method: "PATCH",
+        body: { scan_interval_minutes: value },
+      });
+      await loadData();
+    } catch (e: any) {
+      setErr(e.message);
+    }
   }
 
   async function scan(id: string) {
@@ -191,7 +231,7 @@ export default function ModulePage() {
 
       <form
         onSubmit={addMonitor}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-4"
+        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-5"
       >
         <input
           required
@@ -218,6 +258,18 @@ export default function ModulePage() {
           onChange={(e) => setAssetValue(e.target.value)}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
         />
+        <select
+          value={intervalMin ?? ""}
+          onChange={(e) => setIntervalMin(e.target.value === "" ? null : Number(e.target.value))}
+          title="Otomatik tarama sıklığı"
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+        >
+          {SCHEDULE_OPTIONS.map((o) => (
+            <option key={o.label} value={o.value ?? ""}>
+              {o.value === null ? "Manuel" : `Otomatik: ${o.label}`}
+            </option>
+          ))}
+        </select>
         <button className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold hover:bg-sky-500">
           + Monitör ekle
         </button>
@@ -238,8 +290,29 @@ export default function ModulePage() {
                   {ASSET_LABEL[m.asset_type] ?? m.asset_type}:{" "}
                   <span className="font-mono">{m.asset_value}</span>
                 </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {m.scan_interval_minutes
+                    ? `⏱ Otomatik: her ${scheduleLabel(m.scan_interval_minutes)} · ${lastScanLabel(
+                        m.last_scanned_at
+                      )}`
+                    : `Manuel · ${lastScanLabel(m.last_scanned_at)}`}
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <select
+                  value={m.scan_interval_minutes ?? ""}
+                  onChange={(e) =>
+                    setSchedule(m.id, e.target.value === "" ? null : Number(e.target.value))
+                  }
+                  title="Otomatik tarama sıklığı"
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs outline-none focus:border-sky-500"
+                >
+                  {SCHEDULE_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.value ?? ""}>
+                      {o.value === null ? "Manuel" : o.label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={() => scan(m.id)}
                   disabled={scanning === m.id}
