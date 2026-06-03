@@ -50,7 +50,11 @@ type Finding = {
   source: string;
   asset_value: string;
   seen_count: number;
+  assigned_user_id: string | null;
 };
+
+type TeamUser = { id: string; email: string; full_name: string | null };
+type Comment = { id: string; user_id: string | null; body: string; created_at: string };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "new", label: "Yeni" },
@@ -81,6 +85,10 @@ export default function ModulePage() {
   const [mod, setMod] = useState<ModuleItem | null>(null);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [team, setTeam] = useState<TeamUser[]>([]);
+  const [openComments, setOpenComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState("");
   const [name, setName] = useState("");
   const [assetType, setAssetType] = useState("");
   const [assetValue, setAssetValue] = useState("");
@@ -100,12 +108,14 @@ export default function ModulePage() {
 
   async function loadData() {
     try {
-      const [mo, fi] = await Promise.all([
+      const [mo, fi, tm] = await Promise.all([
         api<Monitor[]>(`/m/${key}/monitors`),
         api<Finding[]>(`/findings?module=${key}&limit=200`),
+        api<TeamUser[]>(`/team`).catch(() => [] as TeamUser[]),
       ]);
       setMonitors(mo);
       setFindings(fi);
+      setTeam(tm);
       setNotEnabled(false);
     } catch (e: any) {
       if (String(e.message).includes("açık değil")) setNotEnabled(true);
@@ -170,6 +180,50 @@ export default function ModulePage() {
     try {
       await api(`/findings/${id}`, { method: "PATCH", body: { status } });
       setFindings((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function setAssignee(id: string, value: string) {
+    setErr("");
+    const assigned_user_id = value || null;
+    try {
+      await api(`/findings/${id}/assign`, { method: "PATCH", body: { assigned_user_id } });
+      setFindings((prev) => prev.map((f) => (f.id === id ? { ...f, assigned_user_id } : f)));
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  function userName(id: string | null): string {
+    if (!id) return "Atanmamış";
+    const u = team.find((x) => x.id === id);
+    return u ? u.full_name || u.email : "—";
+  }
+
+  async function toggleComments(id: string) {
+    if (openComments === id) {
+      setOpenComments(null);
+      return;
+    }
+    setOpenComments(id);
+    setComments([]);
+    setCommentText("");
+    try {
+      setComments(await api<Comment[]>(`/findings/${id}/comments`));
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function addComment(id: string) {
+    const body = commentText.trim();
+    if (!body) return;
+    try {
+      const c = await api<Comment>(`/findings/${id}/comments`, { body: { body } });
+      setComments((prev) => [...prev, c]);
+      setCommentText("");
     } catch (e: any) {
       setErr(e.message);
     }
@@ -379,10 +433,23 @@ export default function ModulePage() {
                   </span>
                 )}
                 <select
+                  value={f.assigned_user_id ?? ""}
+                  onChange={(e) => setAssignee(f.id, e.target.value)}
+                  title="Atanan kişi"
+                  className="ml-auto rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+                >
+                  <option value="">Atanmamış</option>
+                  {team.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.email}
+                    </option>
+                  ))}
+                </select>
+                <select
                   value={f.status}
                   onChange={(e) => setFindingStatus(f.id, e.target.value)}
                   title="Bulgu durumu"
-                  className="ml-auto rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
                 >
                   {STATUS_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -397,6 +464,41 @@ export default function ModulePage() {
                 <div className="mt-2 rounded-lg border-l-2 border-sky-500 bg-slate-800/50 p-2 text-sm text-slate-400">
                   <span className="font-semibold text-slate-300">Öneri: </span>
                   {f.recommendation}
+                </div>
+              )}
+              <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                <span>👤 {userName(f.assigned_user_id)}</span>
+                <button onClick={() => toggleComments(f.id)} className="hover:text-sky-400">
+                  💬 Yorumlar
+                </button>
+              </div>
+              {openComments === f.id && (
+                <div className="mt-2 space-y-2 rounded-lg bg-slate-800/40 p-3">
+                  {comments.length === 0 && <p className="text-xs text-slate-500">Henüz yorum yok.</p>}
+                  {comments.map((c) => (
+                    <div key={c.id} className="text-sm">
+                      <span className="text-slate-300">{userName(c.user_id)}: </span>
+                      <span className="text-slate-400">{c.body}</span>
+                      <span className="ml-2 text-[10px] text-slate-600">
+                        {new Date(c.created_at).toLocaleString("tr-TR")}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <input
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addComment(f.id)}
+                      placeholder="Yorum ekle…"
+                      className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm outline-none focus:border-sky-500"
+                    />
+                    <button
+                      onClick={() => addComment(f.id)}
+                      className="rounded-lg bg-sky-600 px-3 py-1 text-sm font-medium hover:bg-sky-500"
+                    >
+                      Gönder
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

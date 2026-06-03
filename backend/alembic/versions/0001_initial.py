@@ -162,6 +162,7 @@ def upgrade() -> None:
         sa.Column("source", sa.String(200), nullable=False),
         sa.Column("asset_value", sa.String(500), nullable=False),
         sa.Column("raw_data", JSONB, nullable=False),
+        sa.Column("assigned_user_id", UUID, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("fingerprint", sa.String(64), nullable=True),
         sa.Column("seen_count", sa.Integer(), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
@@ -189,8 +190,20 @@ def upgrade() -> None:
     op.create_index("ix_audit_logs_organization_id", "audit_logs", ["organization_id"])
     op.create_index("ix_audit_logs_created_at", "audit_logs", ["created_at"])
 
+    # finding_comments
+    op.create_table(
+        "finding_comments",
+        sa.Column("id", UUID, primary_key=True),
+        sa.Column("finding_id", UUID, sa.ForeignKey("findings.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", UUID, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    )
+    op.create_index("ix_finding_comments_finding_id", "finding_comments", ["finding_id"])
+
 
 def downgrade() -> None:
+    op.drop_table("finding_comments")
     op.drop_table("audit_logs")
     op.drop_table("findings")
     op.drop_table("tasks")

@@ -67,6 +67,7 @@ class FindingOut(BaseModel):
     asset_value: str
     raw_data: dict
     seen_count: int
+    assigned_user_id: uuid.UUID | None = None
     detected_at: datetime
     last_seen_at: datetime
 

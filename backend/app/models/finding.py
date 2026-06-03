@@ -76,6 +76,11 @@ class Finding(Base, TimestampMixin):
     asset_value: Mapped[str] = mapped_column(String(500), nullable=False)
     raw_data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
+    # Atama: bulgu bir ekip uyesine atanabilir
+    assigned_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Yinelenme onleme (dedup) + tekrar gorulme takibi
     fingerprint: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     seen_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
