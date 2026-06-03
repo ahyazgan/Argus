@@ -13,6 +13,8 @@ from app.modules.security_scan.analyzer import heuristic as security_heuristic
 from app.modules.security_scan.collectors import SurfaceProbeCollector
 from app.modules.brand_protection.analyzer import heuristic as brand_heuristic
 from app.modules.brand_protection.collectors import LookalikeDomainCollector
+from app.modules.financial_crime.analyzer import heuristic as financial_heuristic
+from app.modules.financial_crime.collectors import DemoFinancialSignalCollector
 
 
 def test_slugify_turkish():
@@ -41,6 +43,7 @@ def test_catalog_has_live_modules():
     assert "illegal_site" in live  # ikinci canli modul
     assert "security_scan" in live  # ucuncu canli modul
     assert "brand_protection" in live  # dorduncu canli modul
+    assert "financial_crime" in live  # besinci canli modul
     assert "darkweb" in VALID_MODULE_KEYS
     assert len(CATALOG) == 9  # gorseldeki 9 modul
 
@@ -155,3 +158,39 @@ def test_lookalike_collector_is_deterministic():
     assert len(recs) >= 1
     assert all("variant_domain" in r and "technique" in r for r in recs)
     assert c.collect("brand", "markam") == recs  # deterministik
+
+
+def test_financial_heuristic_sanctioned_is_critical():
+    res = financial_heuristic(
+        {"signal_type": "sanctioned_counterparty", "list": "OFAC SDN", "entity": "0xabc"},
+        "0xabc",
+        "wallet",
+    )
+    assert res.severity == "critical"
+    assert "MASAK" in res.recommendation
+
+
+def test_financial_heuristic_mixer_is_high():
+    res = financial_heuristic(
+        {"signal_type": "mixer_usage", "mixer": "Tornado", "entity": "0xabc"},
+        "0xabc",
+        "wallet",
+    )
+    assert res.severity == "high"
+
+
+def test_financial_heuristic_shell_company_is_medium():
+    res = financial_heuristic(
+        {"signal_type": "shell_company", "entity": "ACME Ltd"},
+        "ACME Ltd",
+        "company",
+    )
+    assert res.severity == "medium"
+
+
+def test_financial_signal_collector_is_deterministic():
+    c = DemoFinancialSignalCollector()
+    recs = c.collect("wallet", "0xabc")
+    assert len(recs) >= 1
+    assert all("signal_type" in r for r in recs)
+    assert c.collect("wallet", "0xabc") == recs  # deterministik

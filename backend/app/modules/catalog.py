@@ -55,7 +55,7 @@ CATALOG: list[ModuleMeta] = [
         description="Kripto ponzi, para aklama, MASAK",
         category="financial",
         asset_types=["wallet", "company", "keyword"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="disinformation",
