@@ -14,10 +14,42 @@ from __future__ import annotations
 
 import hashlib
 
+import httpx
+
 from app.core.config import settings
 from app.core_services.osint.base import Collector
 
 _RECORD_TYPES = ["litigation", "enforcement", "bankruptcy", "adverse_media", "tax_debt"]
+
+# OpenCorporates'ta risk gostergesi sayilan (aktif olmayan) durum anahtar kelimeleri
+_INACTIVE_MARKERS = ("dissolved", "inactive", "liquidation", "closed", "struck", "cancelled")
+
+
+def parse_opencorporates(payload: dict, company: str) -> list[dict]:
+    """OpenCorporates 'companies/search' yanitini due-diligence kayitlarina cevirir (saf).
+
+    Yalnizca risk gostergesi olan (aktif olmayan / tasfiye) sirketleri kayit olarak uretir.
+    """
+    records: list[dict] = []
+    results = (payload.get("results") or {}).get("companies") or []
+    for item in results:
+        c = item.get("company") or {}
+        status = (c.get("current_status") or "").strip()
+        inactive = c.get("inactive") is True or any(m in status.lower() for m in _INACTIVE_MARKERS)
+        if not inactive:
+            continue
+        records.append(
+            {
+                "source": "opencorporates",
+                "asset_type": "company",
+                "asset_value": company,
+                "company": c.get("name", company),
+                "record_type": "bankruptcy",
+                "status": status or "aktif degil",
+                "jurisdiction": c.get("jurisdiction_code"),
+            }
+        )
+    return records
 
 
 class DemoRegistryCollector(Collector):
@@ -58,22 +90,30 @@ class DemoRegistryCollector(Collector):
         return records
 
 
-class CourtRecordsCollector(Collector):
-    """Mahkeme/sicil/ticaret kaydi API'si (anahtar varsa).
+class OpenCorporatesCollector(Collector):
+    """OpenCorporates sirket sicili (COURT_RECORDS_API_KEY = api_token).
 
-    Anahtar yapilandirilmamissa bos liste doner (demo akisini bozmaz).
-    Gercek entegrasyon icin settings'e COURT_RECORDS_API_KEY ekleyin ve asagiyi doldurun.
+    Aktif olmayan / tasfiye halindeki sirketleri risk kaydi olarak uretir. Anahtarsiz
+    veya hata durumunda bos doner (demo konnektore dusulur).
     """
 
-    name = "court-records"
+    name = "opencorporates"
 
     def collect(self, asset_type: str, asset_value: str) -> list[dict]:
-        api_key = getattr(settings, "court_records_api_key", "")
-        if not api_key:
+        token = getattr(settings, "court_records_api_key", "")
+        if not token or asset_type != "company":
             return []
-        # Gercek cagri burada yapilir (httpx ile). Anahtarsiz demoda devre disi.
-        return []
+        try:
+            resp = httpx.get(
+                "https://api.opencorporates.com/v0.4/companies/search",
+                params={"q": asset_value, "api_token": token, "per_page": 10},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return parse_opencorporates(resp.json(), asset_value)
+        except (httpx.HTTPError, ValueError):
+            return []
 
 
 def get_collectors() -> list[Collector]:
-    return [DemoRegistryCollector(), CourtRecordsCollector()]
+    return [DemoRegistryCollector(), OpenCorporatesCollector()]

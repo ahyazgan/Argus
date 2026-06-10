@@ -133,9 +133,16 @@ docker compose exec backend pytest -m integration    # canlı API testleri (kiml
   | darkweb | HaveIBeenPwned (`HIBP_API_KEY`) | ✅ gerçek API bağlı |
   | security_scan | Shodan (`SHODAN_API_KEY`) | ✅ gerçek API bağlı |
   | brand_protection | DNS-over-HTTPS (`BRAND_DNS_CHECK=true`) | ✅ gerçek, anahtarsız |
-  | illegal_site / financial_crime / competitor_intel / disinformation / due_diligence / ai_testing | arama/zincir/scrape/sosyal/sicil/uç-nokta API'leri | ⏳ entegrasyon noktası hazır (stub); sağlayıcı anahtarı gerektirir |
+  | ai_testing | Müşterinin kendi uç noktası (`AI_LIVE_PROBE=true`) | ✅ gerçek red-team, anahtarsız |
+  | disinformation | Google News RSS (`DISINFO_NEWS=true`) | ✅ gerçek, anahtarsız |
+  | due_diligence | OpenCorporates (`COURT_RECORDS_API_KEY`) | ✅ gerçek API (anahtar gerektirir) |
+  | illegal_site | Google CSE (`SEARCH_API_KEY` + `GOOGLE_CSE_ID`) | ✅ gerçek API (anahtar gerektirir) |
+  | financial_crime | OpenSanctions (`CHAIN_ANALYSIS_API_KEY`) | ✅ gerçek API (anahtar gerektirir) |
+  | competitor_intel | Web kazıma sağlayıcısı (`SCRAPE_API_KEY`) | ⏳ stub (sağlayıcı sözleşmesi gerektirir) |
 
-  Anahtar/sağlayıcı yoksa ilgili modül deterministik demo konnektörüne düşer (demo akışı bozulmaz).
+  Anahtar/sağlayıcı yoksa veya bayrak kapalıysa ilgili modül deterministik demo konnektörüne
+  düşer (demo akışı bozulmaz). Gerçek konnektörlerin yanıt ayrıştırıcıları (parser) sağlayıcıya
+  erişmeden birim testleriyle doğrulanır.
 - **Stripe** gerçek akış için hazır: `STRIPE_ENABLED=true` + `STRIPE_SECRET_KEY` +
   `STRIPE_PRICE_*` ile checkout oturumu açılır, `/billing/webhook` imza doğrulayıp
   aboneliği günceller. Kapalıyken stub döner (plan limiti dayatması yine çalışır).

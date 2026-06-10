@@ -58,8 +58,14 @@ class Settings(BaseSettings):
     chain_analysis_api_key: str = ""  # financial_crime (zincir analizi/yaptirim)
     scrape_api_key: str = ""  # competitor_intel (web kazima/fiyat)
     social_api_key: str = ""  # disinformation (sosyal medya/anlati)
-    court_records_api_key: str = ""  # due_diligence (mahkeme/sicil)
-    ai_probe_api_key: str = ""  # ai_testing (gercek izinli uc nokta testi)
+    court_records_api_key: str = ""  # due_diligence (OpenCorporates api_token)
+    ai_probe_api_key: str = ""  # ai_testing (uc nokta icin opsiyonel Bearer token)
+    # ai_testing: gercek izinli red-team probe'lari (musterinin KENDI uc noktasina)
+    ai_live_probe: bool = False
+    # illegal_site: Google Programmable Search (CSE) - arama motoru id'si
+    google_cse_id: str = ""
+    # disinformation: Google News RSS (anahtarsiz medya-mention izleme; true=ac)
+    disinfo_news: bool = False
 
     # Bildirim esigi: bu onem seviyesi ve uzerindeki YENI bulgularda bildirim gonderilir
     # (info|low|medium|high|critical). Periyodik taramalarda tekrar eden bulgular bildirilmez.

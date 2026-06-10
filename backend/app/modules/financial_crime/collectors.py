@@ -15,8 +15,37 @@ from __future__ import annotations
 
 import hashlib
 
+import httpx
+
 from app.core.config import settings
 from app.core_services.osint.base import Collector
+
+
+def parse_opensanctions(payload: dict, entity: str, threshold: float = 0.7) -> list[dict]:
+    """OpenSanctions /match yanitini yaptirim sinyallerine cevirir (saf).
+
+    Esik (score) ustundeki eslesmeler 'sanctioned_counterparty' kaydi uretir.
+    """
+    records: list[dict] = []
+    responses = payload.get("responses") or {}
+    for _qid, block in responses.items():
+        for res in block.get("results") or []:
+            score = res.get("score") or 0
+            if score < threshold:
+                continue
+            datasets = res.get("datasets") or []
+            records.append(
+                {
+                    "source": "opensanctions",
+                    "asset_type": "company",
+                    "asset_value": entity,
+                    "entity": res.get("caption", entity),
+                    "signal_type": "sanctioned_counterparty",
+                    "list": ", ".join(datasets[:3]) or "OpenSanctions",
+                    "score": round(float(score), 2),
+                }
+            )
+    return records
 
 # Varlik tipine gore olasi sinyaller (deterministik secim icin havuz)
 _SIGNALS_BY_ASSET: dict[str, list[str]] = {
@@ -61,22 +90,32 @@ class DemoFinancialSignalCollector(Collector):
         return records
 
 
-class ChainAnalysisCollector(Collector):
-    """Zincir analizi / yaptirim listesi API'si (anahtar varsa).
+class OpenSanctionsCollector(Collector):
+    """OpenSanctions yaptirim/PEP eslestirme (CHAIN_ANALYSIS_API_KEY = ApiKey).
 
-    Anahtar yapilandirilmamissa bos liste doner (demo akisini bozmaz).
-    Gercek entegrasyon icin settings'e CHAIN_ANALYSIS_API_KEY ekleyin ve asagiyi doldurun.
+    Sirket/anahtar kelime/cuzdan adini yaptirim listelerine karsi sorgular. Anahtarsiz
+    veya hata durumunda bos doner (demo konnektore dusulur).
     """
 
-    name = "chain-analysis"
+    name = "opensanctions"
 
     def collect(self, asset_type: str, asset_value: str) -> list[dict]:
         api_key = getattr(settings, "chain_analysis_api_key", "")
         if not api_key:
             return []
-        # Gercek cagri burada yapilir (httpx ile). Anahtarsiz demoda devre disi.
-        return []
+        schema = "Company" if asset_type == "company" else "Thing"
+        try:
+            resp = httpx.post(
+                "https://api.opensanctions.org/match/default",
+                headers={"Authorization": f"ApiKey {api_key}"},
+                json={"queries": {"q1": {"schema": schema, "properties": {"name": [asset_value]}}}},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return parse_opensanctions(resp.json(), asset_value)
+        except (httpx.HTTPError, ValueError):
+            return []
 
 
 def get_collectors() -> list[Collector]:
-    return [DemoFinancialSignalCollector(), ChainAnalysisCollector()]
+    return [DemoFinancialSignalCollector(), OpenSanctionsCollector()]

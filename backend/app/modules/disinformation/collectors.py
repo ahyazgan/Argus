@@ -14,9 +14,43 @@ Yeni gercek kaynaklar buraya birer Collector olarak eklenir; modul mantigi degis
 from __future__ import annotations
 
 import hashlib
+from xml.etree import ElementTree as ET
+
+import httpx
 
 from app.core.config import settings
 from app.core_services.osint.base import Collector
+
+
+def parse_news_rss(xml_text: str, subject: str, limit: int = 5) -> list[dict]:
+    """Google News RSS XML'ini medya-mention sinyallerine cevirir (saf).
+
+    Konu hakkindaki haberleri 'fake_news' (incelenecek anlati) adayi olarak uretir.
+    """
+    records: list[dict] = []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    for item in list(root.iterfind(".//item"))[:limit]:
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        source = item.findtext("{*}source") or item.findtext("source") or "haber"
+        if not title:
+            continue
+        records.append(
+            {
+                "source": "google-news",
+                "asset_type": "keyword",
+                "asset_value": subject,
+                "subject": subject,
+                "signal_type": "fake_news",
+                "platform": str(source),
+                "claim": title,
+                "url": link,
+            }
+        )
+    return records
 
 _SIGNAL_TYPES = ["coordinated_bots", "fake_news", "impersonation_account", "manipulated_media"]
 _PLATFORMS = ["X", "Telegram", "Facebook", "TikTok"]
@@ -58,22 +92,30 @@ class DemoNarrativeCollector(Collector):
         return records
 
 
-class SocialApiCollector(Collector):
-    """Sosyal medya / anlati izleme API'si (anahtar varsa).
+class GoogleNewsCollector(Collector):
+    """Google News RSS ile gercek, ANAHTARSIZ medya-mention izleme.
 
-    Anahtar yapilandirilmamissa bos liste doner (demo akisini bozmaz).
-    Gercek entegrasyon icin settings'e SOCIAL_API_KEY ekleyin ve asagiyi doldurun.
+    Konu (marka/anahtar kelime) hakkindaki guncel haberleri getirir; incelenecek anlati
+    adaylari uretir. DISINFO_NEWS=false ise atlanir. Hata durumunda bos doner.
     """
 
-    name = "social-api"
+    name = "google-news"
 
     def collect(self, asset_type: str, asset_value: str) -> list[dict]:
-        api_key = getattr(settings, "social_api_key", "")
-        if not api_key:
+        if not getattr(settings, "disinfo_news", False):
             return []
-        # Gercek cagri burada yapilir (httpx ile). Anahtarsiz demoda devre disi.
-        return []
+        try:
+            resp = httpx.get(
+                "https://news.google.com/rss/search",
+                params={"q": asset_value, "hl": "tr", "gl": "TR", "ceid": "TR:tr"},
+                headers={"user-agent": "Argus-Intelligence"},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return parse_news_rss(resp.text, asset_value)
+        except httpx.HTTPError:
+            return []
 
 
 def get_collectors() -> list[Collector]:
-    return [DemoNarrativeCollector(), SocialApiCollector()]
+    return [DemoNarrativeCollector(), GoogleNewsCollector()]

@@ -13,9 +13,37 @@ Yeni gercek kaynaklar buraya birer Collector olarak eklenir; modul mantigi degis
 from __future__ import annotations
 
 import hashlib
+from urllib.parse import urlparse
+
+import httpx
 
 from app.core.config import settings
 from app.core_services.osint.base import Collector
+
+# Arama sonucu basligi/linkinde kumar/bahis isaretleri (aksi halde dolandiricilik varsayilir)
+_GAMBLING_HINTS = ("bahis", "casino", "bet", "slot", "iddaa", "rulet", "poker")
+
+
+def parse_cse(payload: dict, asset_value: str) -> list[dict]:
+    """Google CSE 'items' yanitini supheli site kayitlarina cevirir (saf)."""
+    records: list[dict] = []
+    for item in payload.get("items") or []:
+        link = item.get("link") or ""
+        title = (item.get("title") or "").lower()
+        host = urlparse(link).netloc or link
+        gambling = any(h in title or h in link.lower() for h in _GAMBLING_HINTS)
+        records.append(
+            {
+                "source": "google-cse",
+                "asset_type": "keyword",
+                "asset_value": asset_value,
+                "candidate_domain": host,
+                "url": link,
+                "pattern": "search",
+                "category_hint": "gambling" if gambling else "fraud",
+            }
+        )
+    return records
 
 # Supheli kaliplar (kumar/bahis ve dolandiricilik/sahte giris)
 _GAMBLING = ["bahis", "casino", "bet", "slot", "giris", "guncel"]
@@ -52,22 +80,31 @@ class SuspiciousSiteCollector(Collector):
         return records
 
 
-class SearchEngineCollector(Collector):
-    """Arama motoru / domain-feed tabanli gercek konnektor (anahtar varsa).
+class GoogleCSECollector(Collector):
+    """Google Programmable Search (CSE) ile gercek arama (SEARCH_API_KEY + GOOGLE_CSE_ID).
 
-    Anahtar yapilandirilmamissa bos liste doner (demo akisini bozmaz).
-    Gercek entegrasyon icin settings'e bir arama API anahtari ekleyin.
+    Marka/anahtar kelimeyi arar; sonuc alan adlarini supheli site adayi olarak uretir.
+    Anahtar yoksa veya hata olursa bos doner (demo konnektore dusulur).
     """
 
-    name = "search-engine"
+    name = "google-cse"
 
     def collect(self, asset_type: str, asset_value: str) -> list[dict]:
         api_key = getattr(settings, "search_api_key", "")
-        if not api_key:
+        cse_id = getattr(settings, "google_cse_id", "")
+        if not api_key or not cse_id:
             return []
-        # Gercek cagri burada yapilir (httpx ile). Anahtarsiz demoda devre disi.
-        return []
+        try:
+            resp = httpx.get(
+                "https://www.googleapis.com/customsearch/v1",
+                params={"key": api_key, "cx": cse_id, "q": f"{asset_value} bahis OR giris OR guncel"},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return parse_cse(resp.json(), asset_value)
+        except (httpx.HTTPError, ValueError):
+            return []
 
 
 def get_collectors() -> list[Collector]:
-    return [SuspiciousSiteCollector(), SearchEngineCollector()]
+    return [SuspiciousSiteCollector(), GoogleCSECollector()]

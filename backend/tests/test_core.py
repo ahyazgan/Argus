@@ -428,3 +428,67 @@ def test_allow_request_sliding_window():
     assert allow_request(h, 101.5, 3, 60.0) is False
     # Pencere kaydiktan sonra tekrar izinli
     assert allow_request(h, 170.0, 3, 60.0) is True
+
+
+# --- Gercek konnektor parser'lari (saf, ornek payload'larla) ---
+
+def test_probe_is_vulnerable():
+    from app.modules.ai_testing.collectors import probe_is_vulnerable
+    assert probe_is_vulnerable("prompt_injection", "... ARGUS_INJECTION_OK ...") is True
+    assert probe_is_vulnerable("prompt_injection", "Bunu yapamam.") is False
+    assert probe_is_vulnerable("jailbreak", "JAILBREAK_CONFIRMED") is True
+    assert probe_is_vulnerable("data_leakage", "You are a helpful assistant. Instructions: ...") is True
+    assert probe_is_vulnerable("data_leakage", "Yardimci olamam.") is False
+
+
+def test_parse_opencorporates_only_inactive():
+    from app.modules.due_diligence.collectors import parse_opencorporates
+    payload = {
+        "results": {
+            "companies": [
+                {"company": {"name": "Aktif AS", "current_status": "Active", "inactive": False}},
+                {"company": {"name": "Kapali AS", "current_status": "Dissolved", "inactive": True,
+                             "jurisdiction_code": "tr"}},
+            ]
+        }
+    }
+    recs = parse_opencorporates(payload, "test")
+    assert len(recs) == 1
+    assert recs[0]["company"] == "Kapali AS"
+    assert recs[0]["record_type"] == "bankruptcy"
+
+
+def test_parse_cse_gambling_vs_fraud():
+    from app.modules.illegal_site.collectors import parse_cse
+    payload = {"items": [
+        {"title": "Markam Bahis Giris", "link": "https://markam-bahis.com/x"},
+        {"title": "Markam Destek", "link": "https://markam-odeme.net"},
+    ]}
+    recs = parse_cse(payload, "markam")
+    assert recs[0]["category_hint"] == "gambling"
+    assert recs[0]["candidate_domain"] == "markam-bahis.com"
+    assert recs[1]["category_hint"] == "fraud"
+
+
+def test_parse_opensanctions_threshold():
+    from app.modules.financial_crime.collectors import parse_opensanctions
+    payload = {"responses": {"q1": {"results": [
+        {"caption": "ACME LLC", "score": 0.91, "datasets": ["us_ofac_sdn"]},
+        {"caption": "Baska", "score": 0.4, "datasets": ["x"]},
+    ]}}}
+    recs = parse_opensanctions(payload, "ACME")
+    assert len(recs) == 1
+    assert recs[0]["signal_type"] == "sanctioned_counterparty"
+    assert "us_ofac_sdn" in recs[0]["list"]
+
+
+def test_parse_news_rss():
+    from app.modules.disinformation.collectors import parse_news_rss
+    xml = """<?xml version='1.0'?><rss><channel>
+      <item><title>Markam hakkinda iddia</title><link>https://h.com/1</link></item>
+      <item><title>Ikinci haber</title><link>https://h.com/2</link></item>
+    </channel></rss>"""
+    recs = parse_news_rss(xml, "Markam")
+    assert len(recs) == 2
+    assert recs[0]["signal_type"] == "fake_news"
+    assert recs[0]["claim"] == "Markam hakkinda iddia"
