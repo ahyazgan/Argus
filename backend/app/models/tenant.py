@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin, uuid_pk
@@ -24,6 +25,22 @@ class Organization(Base, TimestampMixin):
     # Bildirim kanallari (Slack/webhook) - yeni bulguda tetiklenir
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     slack_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # E-posta bildirimi (adres bossa atlanir; SMTP ayarlari da gereklidir)
+    notify_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # GitHub Issues cikti kanali
+    github_repo: Mapped[str | None] = mapped_column(String(140), nullable=True)  # "owner/repo"
+    github_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Jira cikti kanali
+    jira_base_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    jira_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    jira_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    jira_project_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Kamu/BTK ihbar entegrasyonu (yapilandirilabilir uc nokta)
+    gov_report_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    gov_report_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Zamanlanmis PDF rapor: "none" | "daily" | "weekly" (alici: notify_email)
+    report_schedule: Mapped[str] = mapped_column(String(10), default="none", nullable=False)
+    last_report_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Dis entegrasyon (REST API) icin API anahtari
     api_key: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
 

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.core.middleware import AuthRateLimitMiddleware, SecurityHeadersMiddleware
 from app.modules import load_modules
 
 # Tum modellerin Base.metadata'ya kaydolmasi icin ice aktar (create_all icin gerekli)
@@ -32,12 +33,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Guvenlik basliklari (tum yanitlara) + auth uclari icin rate limit
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    AuthRateLimitMiddleware,
+    limit_per_minute=settings.auth_rate_limit_per_minute,
+    protected_prefixes=(
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/accept-invite",
+    ),
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(api_router, prefix="/api/v1")

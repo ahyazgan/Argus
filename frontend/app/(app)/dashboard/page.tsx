@@ -17,8 +17,14 @@ type Finding = {
   title: string;
   severity: string;
   summary: string | null;
-  asset_value: string;
-  detected_at: string;
+};
+
+type Stats = {
+  total: number;
+  open: number;
+  by_severity: Record<string, number>;
+  by_module: Record<string, number>;
+  by_day: { day: string; count: number }[];
 };
 
 const SEV_COLOR: Record<string, string> = {
@@ -29,33 +35,45 @@ const SEV_COLOR: Record<string, string> = {
   info: "bg-slate-500/20 text-slate-300",
 };
 
+const SEV_BAR: Record<string, string> = {
+  critical: "bg-red-500",
+  high: "bg-orange-500",
+  medium: "bg-yellow-500",
+  low: "bg-blue-500",
+  info: "bg-slate-500",
+};
+
+const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
+
 export default function DashboardPage() {
   const [sub, setSub] = useState<Subscription | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     Promise.all([
       api<Subscription>("/modules/subscription"),
-      api<Finding[]>("/findings?limit=10"),
+      api<Finding[]>("/findings?limit=8"),
+      api<Stats>("/findings/stats"),
     ])
-      .then(([s, f]) => {
+      .then(([s, f, st]) => {
         setSub(s);
         setFindings(f);
+        setStats(st);
       })
       .catch((e) => setErr(e.message));
   }, []);
 
-  const counts = findings.reduce<Record<string, number>>((acc, f) => {
-    acc[f.severity] = (acc[f.severity] || 0) + 1;
-    return acc;
-  }, {});
+  const sevMax = Math.max(1, ...Object.values(stats?.by_severity ?? {}));
+  const dayMax = Math.max(1, ...(stats?.by_day ?? []).map((d) => d.count));
+  const critHigh = (stats?.by_severity.critical || 0) + (stats?.by_severity.high || 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Genel bakış</h1>
-        <p className="text-sm text-slate-400">Tehdit istihbaratı özeti</p>
+        <p className="text-sm text-slate-400">Tehdit istihbaratı komuta merkezi</p>
       </div>
 
       {err && <p className="text-sm text-red-400">{err}</p>}
@@ -66,32 +84,89 @@ export default function DashboardPage() {
           title="Açık modüller"
           value={`${sub?.enabled_modules.length ?? 0} / ${sub?.module_limit ?? 0}`}
         />
-        <Card title="Toplam bulgu" value={String(findings.length)} />
-        <Card
-          title="Yüksek/Kritik"
-          value={String((counts.high || 0) + (counts.critical || 0))}
-        />
+        <Card title="Toplam bulgu" value={String(stats?.total ?? 0)} sub={`${stats?.open ?? 0} açık`} />
+        <Card title="Yüksek/Kritik" value={String(critHigh)} />
       </div>
 
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Son bulgular</h2>
-          <Link href="/m/darkweb" className="text-sm text-sky-400 hover:underline">
-            Tümünü gör →
-          </Link>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Önem dağılımı */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Önem dağılımı
+          </h2>
+          <div className="space-y-2">
+            {SEV_ORDER.map((sev) => {
+              const v = stats?.by_severity[sev] || 0;
+              return (
+                <div key={sev} className="flex items-center gap-3">
+                  <span className="w-16 text-xs uppercase text-slate-400">{sev}</span>
+                  <div className="h-3 flex-1 overflow-hidden rounded bg-slate-800">
+                    <div
+                      className={`h-full ${SEV_BAR[sev]}`}
+                      style={{ width: `${(v / sevMax) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-8 text-right text-xs text-slate-300">{v}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
+
+        {/* Son 14 gün trendi */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Son 14 gün (bulgu)
+          </h2>
+          {(stats?.by_day?.length ?? 0) === 0 ? (
+            <p className="text-sm text-slate-500">Henüz veri yok.</p>
+          ) : (
+            <div className="flex h-32 items-end gap-1">
+              {stats!.by_day.map((d) => (
+                <div key={d.day} className="flex flex-1 flex-col items-center gap-1" title={`${d.day}: ${d.count}`}>
+                  <div
+                    className="w-full rounded-t bg-sky-500"
+                    style={{ height: `${(d.count / dayMax) * 100}%`, minHeight: d.count ? "4px" : "0" }}
+                  />
+                  <span className="text-[9px] text-slate-600">{d.day.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modüle göre dağılım */}
+      {stats && Object.keys(stats.by_module).length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Modüle göre bulgu
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(stats.by_module).map(([k, v]) => (
+              <Link
+                key={k}
+                href={`/m/${k}`}
+                className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                {k} · <span className="font-semibold">{v}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Son bulgular</h2>
         <div className="space-y-2">
           {findings.length === 0 && (
             <p className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">
-              Henüz bulgu yok. <Link href="/m/darkweb" className="text-sky-400">Dark web izleme</Link>’den
-              bir monitör ekleyip tarama başlatın.
+              Henüz bulgu yok. <Link href="/modules" className="text-sky-400">Modüller</Link>’den bir
+              modül açıp monitör ekleyin.
             </p>
           )}
           {findings.map((f) => (
-            <div
-              key={f.id}
-              className="rounded-lg border border-slate-800 bg-slate-900 p-4"
-            >
+            <div key={f.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
               <div className="flex items-center gap-2">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${

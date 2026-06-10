@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from app.core_services.queue.celery_app import celery_app  # noqa: F401
 
-# Genel tarama gorevinin kayit olmasi icin ice aktar
+# Gorevlerin kayit olmasi icin ice aktar: genel tarama + zamanlanmis dispatcher
 import app.core_services.queue.scan_tasks  # noqa: E402, F401
+import app.core_services.queue.scheduler  # noqa: E402, F401
 
 # Modullerin kayit defterine yuklenmesi
 from app.modules import load_modules  # noqa: E402

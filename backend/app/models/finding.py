@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,6 +34,11 @@ class FindingStatus(str, enum.Enum):
 
 class Finding(Base, TimestampMixin):
     __tablename__ = "findings"
+    # Ayni monitor icin ayni parmak izi tek satir olur (dedup): periyodik taramalar
+    # ayni bulguyu cogaltmaz, mevcut satiri gunceller.
+    __table_args__ = (
+        UniqueConstraint("monitor_id", "fingerprint", name="uq_finding_monitor_fingerprint"),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -70,6 +75,18 @@ class Finding(Base, TimestampMixin):
     source: Mapped[str] = mapped_column(String(200), nullable=False)
     asset_value: Mapped[str] = mapped_column(String(500), nullable=False)
     raw_data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+
+    # Atama: bulgu bir ekip uyesine atanabilir
+    assigned_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Yinelenme onleme (dedup) + tekrar gorulme takibi
+    fingerprint: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    seen_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

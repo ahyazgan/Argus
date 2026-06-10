@@ -20,7 +20,18 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # Zamanlanmis tarama: beat her N saniyede vadesi gelen monitorleri dispatch eder.
+    beat_schedule={
+        "scan-due-monitors": {
+            "task": "core.scan_due_monitors",
+            "schedule": float(settings.scan_beat_interval_seconds),
+        },
+        "send-scheduled-reports": {
+            "task": "core.send_scheduled_reports",
+            "schedule": float(settings.report_beat_interval_seconds),
+        },
+    },
 )
 
-# Genel tarama gorevi app.core_services.queue.scan_tasks icinde tanimli ve
+# Gorevler (genel tarama + zamanlanmis dispatcher) ilgili modullerde tanimli ve
 # worker.py tarafindan acikca import edilir. Ek otomatik kesif gerekmez.

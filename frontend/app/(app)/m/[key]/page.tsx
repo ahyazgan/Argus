@@ -18,17 +18,50 @@ type Monitor = {
   name: string;
   asset_type: string;
   asset_value: string;
+  scan_interval_minutes: number | null;
+  last_scanned_at: string | null;
 };
+
+const SCHEDULE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: "Manuel" },
+  { value: 15, label: "15 dk" },
+  { value: 60, label: "1 saat" },
+  { value: 360, label: "6 saat" },
+  { value: 1440, label: "24 saat" },
+];
+
+function scheduleLabel(min: number | null): string {
+  return SCHEDULE_OPTIONS.find((o) => o.value === min)?.label ?? `${min} dk`;
+}
+
+function lastScanLabel(iso: string | null): string {
+  if (!iso) return "henüz taranmadı";
+  const d = new Date(iso);
+  return `son tarama: ${d.toLocaleString("tr-TR")}`;
+}
 
 type Finding = {
   id: string;
   title: string;
   severity: string;
+  status: string;
   summary: string | null;
   recommendation: string | null;
   source: string;
   asset_value: string;
+  seen_count: number;
+  assigned_user_id: string | null;
 };
+
+type TeamUser = { id: string; email: string; full_name: string | null };
+type Comment = { id: string; user_id: string | null; body: string; created_at: string };
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "new", label: "Yeni" },
+  { value: "triaged", label: "İncelendi" },
+  { value: "resolved", label: "Çözüldü" },
+  { value: "false_positive", label: "Hatalı alarm" },
+];
 
 const SEV_COLOR: Record<string, string> = {
   critical: "bg-red-500/20 text-red-300",
@@ -52,9 +85,14 @@ export default function ModulePage() {
   const [mod, setMod] = useState<ModuleItem | null>(null);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [team, setTeam] = useState<TeamUser[]>([]);
+  const [openComments, setOpenComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState("");
   const [name, setName] = useState("");
   const [assetType, setAssetType] = useState("");
   const [assetValue, setAssetValue] = useState("");
+  const [intervalMin, setIntervalMin] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
   const [scanning, setScanning] = useState<string | null>(null);
@@ -70,12 +108,14 @@ export default function ModulePage() {
 
   async function loadData() {
     try {
-      const [mo, fi] = await Promise.all([
+      const [mo, fi, tm] = await Promise.all([
         api<Monitor[]>(`/m/${key}/monitors`),
         api<Finding[]>(`/findings?module=${key}&limit=200`),
+        api<TeamUser[]>(`/team`).catch(() => [] as TeamUser[]),
       ]);
       setMonitors(mo);
       setFindings(fi);
+      setTeam(tm);
       setNotEnabled(false);
     } catch (e: any) {
       if (String(e.message).includes("açık değil")) setNotEnabled(true);
@@ -101,7 +141,13 @@ export default function ModulePage() {
     setErr("");
     try {
       await api(`/m/${key}/monitors`, {
-        body: { module_key: key, name, asset_type: assetType, asset_value: assetValue },
+        body: {
+          module_key: key,
+          name,
+          asset_type: assetType,
+          asset_value: assetValue,
+          scan_interval_minutes: intervalMin,
+        },
       });
       setName("");
       setAssetValue("");
@@ -114,6 +160,73 @@ export default function ModulePage() {
   async function removeMonitor(id: string) {
     await api(`/m/${key}/monitors/${id}`, { method: "DELETE" });
     await loadData();
+  }
+
+  async function setSchedule(id: string, value: number | null) {
+    setErr("");
+    try {
+      await api(`/m/${key}/monitors/${id}/schedule`, {
+        method: "PATCH",
+        body: { scan_interval_minutes: value },
+      });
+      await loadData();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function setFindingStatus(id: string, status: string) {
+    setErr("");
+    try {
+      await api(`/findings/${id}`, { method: "PATCH", body: { status } });
+      setFindings((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function setAssignee(id: string, value: string) {
+    setErr("");
+    const assigned_user_id = value || null;
+    try {
+      await api(`/findings/${id}/assign`, { method: "PATCH", body: { assigned_user_id } });
+      setFindings((prev) => prev.map((f) => (f.id === id ? { ...f, assigned_user_id } : f)));
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  function userName(id: string | null): string {
+    if (!id) return "Atanmamış";
+    const u = team.find((x) => x.id === id);
+    return u ? u.full_name || u.email : "—";
+  }
+
+  async function toggleComments(id: string) {
+    if (openComments === id) {
+      setOpenComments(null);
+      return;
+    }
+    setOpenComments(id);
+    setComments([]);
+    setCommentText("");
+    try {
+      setComments(await api<Comment[]>(`/findings/${id}/comments`));
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function addComment(id: string) {
+    const body = commentText.trim();
+    if (!body) return;
+    try {
+      const c = await api<Comment>(`/findings/${id}/comments`, { body: { body } });
+      setComments((prev) => [...prev, c]);
+      setCommentText("");
+    } catch (e: any) {
+      setErr(e.message);
+    }
   }
 
   async function scan(id: string) {
@@ -191,7 +304,7 @@ export default function ModulePage() {
 
       <form
         onSubmit={addMonitor}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-4"
+        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-5"
       >
         <input
           required
@@ -218,6 +331,18 @@ export default function ModulePage() {
           onChange={(e) => setAssetValue(e.target.value)}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
         />
+        <select
+          value={intervalMin ?? ""}
+          onChange={(e) => setIntervalMin(e.target.value === "" ? null : Number(e.target.value))}
+          title="Otomatik tarama sıklığı"
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+        >
+          {SCHEDULE_OPTIONS.map((o) => (
+            <option key={o.label} value={o.value ?? ""}>
+              {o.value === null ? "Manuel" : `Otomatik: ${o.label}`}
+            </option>
+          ))}
+        </select>
         <button className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold hover:bg-sky-500">
           + Monitör ekle
         </button>
@@ -238,8 +363,29 @@ export default function ModulePage() {
                   {ASSET_LABEL[m.asset_type] ?? m.asset_type}:{" "}
                   <span className="font-mono">{m.asset_value}</span>
                 </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {m.scan_interval_minutes
+                    ? `⏱ Otomatik: her ${scheduleLabel(m.scan_interval_minutes)} · ${lastScanLabel(
+                        m.last_scanned_at
+                      )}`
+                    : `Manuel · ${lastScanLabel(m.last_scanned_at)}`}
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <select
+                  value={m.scan_interval_minutes ?? ""}
+                  onChange={(e) =>
+                    setSchedule(m.id, e.target.value === "" ? null : Number(e.target.value))
+                  }
+                  title="Otomatik tarama sıklığı"
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs outline-none focus:border-sky-500"
+                >
+                  {SCHEDULE_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.value ?? ""}>
+                      {o.value === null ? "Manuel" : o.label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={() => scan(m.id)}
                   disabled={scanning === m.id}
@@ -266,7 +412,12 @@ export default function ModulePage() {
             <p className="text-sm text-slate-400">Bulgu yok. Bir monitör için “Tara”ya basın.</p>
           )}
           {findings.map((f) => (
-            <div key={f.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+            <div
+              key={f.id}
+              className={`rounded-lg border border-slate-800 bg-slate-900 p-4 ${
+                f.status === "resolved" || f.status === "false_positive" ? "opacity-50" : ""
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${
@@ -276,13 +427,78 @@ export default function ModulePage() {
                   {f.severity}
                 </span>
                 <span className="font-medium">{f.title}</span>
-                <span className="ml-auto text-xs text-slate-500">{f.source}</span>
+                {f.seen_count > 1 && (
+                  <span className="rounded-full bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400">
+                    {f.seen_count}× görüldü
+                  </span>
+                )}
+                <select
+                  value={f.assigned_user_id ?? ""}
+                  onChange={(e) => setAssignee(f.id, e.target.value)}
+                  title="Atanan kişi"
+                  className="ml-auto rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+                >
+                  <option value="">Atanmamış</option>
+                  {team.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.email}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={f.status}
+                  onChange={(e) => setFindingStatus(f.id, e.target.value)}
+                  title="Bulgu durumu"
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-500">{f.source}</span>
               </div>
               {f.summary && <p className="mt-2 text-sm text-slate-300">{f.summary}</p>}
               {f.recommendation && (
                 <div className="mt-2 rounded-lg border-l-2 border-sky-500 bg-slate-800/50 p-2 text-sm text-slate-400">
                   <span className="font-semibold text-slate-300">Öneri: </span>
                   {f.recommendation}
+                </div>
+              )}
+              <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                <span>👤 {userName(f.assigned_user_id)}</span>
+                <button onClick={() => toggleComments(f.id)} className="hover:text-sky-400">
+                  💬 Yorumlar
+                </button>
+              </div>
+              {openComments === f.id && (
+                <div className="mt-2 space-y-2 rounded-lg bg-slate-800/40 p-3">
+                  {comments.length === 0 && <p className="text-xs text-slate-500">Henüz yorum yok.</p>}
+                  {comments.map((c) => (
+                    <div key={c.id} className="text-sm">
+                      <span className="text-slate-300">{userName(c.user_id)}: </span>
+                      <span className="text-slate-400">{c.body}</span>
+                      <span className="ml-2 text-[10px] text-slate-600">
+                        {new Date(c.created_at).toLocaleString("tr-TR")}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <input
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addComment(f.id)}
+                      placeholder="Yorum ekle…"
+                      className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm outline-none focus:border-sky-500"
+                    />
+                    <button
+                      onClick={() => addComment(f.id)}
+                      className="rounded-lg bg-sky-600 px-3 py-1 text-sm font-medium hover:bg-sky-500"
+                    >
+                      Gönder
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

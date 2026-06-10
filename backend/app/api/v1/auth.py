@@ -22,7 +22,13 @@ from app.core.utils import slugify
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.tenant import Organization
 from app.models.user import User, UserRole
-from app.schemas.auth import RefreshRequest, RegisterRequest, Token, UserOut
+from app.schemas.auth import (
+    AcceptInviteRequest,
+    RefreshRequest,
+    RegisterRequest,
+    Token,
+    UserOut,
+)
 
 router = APIRouter()
 
@@ -112,6 +118,23 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
     return Token(
         access_token=create_access_token(user.id, org_id),
         refresh_token=create_refresh_token(user.id, org_id),
+    )
+
+
+@router.post("/accept-invite", response_model=Token)
+async def accept_invite(payload: AcceptInviteRequest, db: AsyncSession = Depends(get_db)) -> Token:
+    """Davet token'i ile hesabi etkinlestirir: parola belirler ve oturum acar."""
+    result = await db.execute(select(User).where(User.invite_token == payload.token))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=400, detail="Gecersiz veya kullanilmis davet")
+    user.hashed_password = hash_password(payload.password)
+    user.is_active = True
+    user.invite_token = None
+    await db.flush()
+    return Token(
+        access_token=create_access_token(user.id, user.organization_id),
+        refresh_token=create_refresh_token(user.id, user.organization_id),
     )
 
 

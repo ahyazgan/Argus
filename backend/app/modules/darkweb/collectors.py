@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 
+import httpx
+
 from app.core.config import settings
 from app.core_services.osint.base import Collector
 
@@ -60,8 +62,37 @@ class HIBPCollector(Collector):
         api_key = getattr(settings, "hibp_api_key", "")
         if not api_key or asset_type != "email":
             return []
-        # Gercek cagri burada yapilir (httpx ile). Anahtarsiz demoda devre disi.
-        return []
+        try:
+            resp = httpx.get(
+                f"https://haveibeenpwned.com/api/v3/breachedaccount/{asset_value}",
+                params={"truncateResponse": "false"},
+                headers={"hibp-api-key": api_key, "user-agent": "Argus-Intelligence"},
+                timeout=15.0,
+            )
+            if resp.status_code == 404:
+                return []  # sizinti bulunamadi
+            resp.raise_for_status()
+            breaches = resp.json()
+        except (httpx.HTTPError, ValueError):
+            return []  # API hatasi demo/tarama akisini bozmasin
+
+        records: list[dict] = []
+        for b in breaches:
+            data_classes = b.get("DataClasses", []) or []
+            has_pw = any("password" in str(c).lower() for c in data_classes)
+            rec = {
+                "source": f"{self.name}:{b.get('Name', 'breach')}",
+                "asset_type": asset_type,
+                "asset_value": asset_value,
+                "breach_name": b.get("Name"),
+                "breach_date": b.get("BreachDate"),
+                "leaked_field": "email",
+                "data_classes": data_classes,
+            }
+            if has_pw:
+                rec["password"] = "*** (sizan veri sinifinda parola mevcut)"
+            records.append(rec)
+        return records
 
 
 def get_collectors() -> list[Collector]:

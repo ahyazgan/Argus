@@ -12,12 +12,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_tenant_id, get_subscription
+from app.core.deps import get_current_tenant_id, get_current_user, get_subscription
+from app.core_services.audit import record_audit
 from app.models.monitor import Monitor
 from app.models.subscription import Subscription
 from app.models.task import Task, TaskStatus
+from app.models.user import User
 from app.modules.catalog import CATALOG_BY_KEY
-from app.schemas.monitor import MonitorCreate, MonitorOut, ScanTriggerOut
+from app.schemas.monitor import (
+    MonitorCreate,
+    MonitorOut,
+    MonitorScheduleUpdate,
+    ScanTriggerOut,
+)
 
 router = APIRouter()
 
@@ -42,6 +49,7 @@ async def create_monitor(
     payload: MonitorCreate,
     module_key: str = Path(...),
     meta=Depends(module_access),
+    user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> Monitor:
@@ -56,10 +64,47 @@ async def create_monitor(
         name=payload.name,
         asset_type=payload.asset_type,
         asset_value=payload.asset_value,
+        scan_interval_minutes=payload.scan_interval_minutes,
     )
     db.add(monitor)
     await db.flush()
     await db.refresh(monitor)
+    record_audit(
+        db,
+        organization_id=tenant_id,
+        user_id=user.id,
+        action="monitor.create",
+        target_type="monitor",
+        target_id=str(monitor.id),
+        detail=f"{module_key}: {payload.asset_type}={payload.asset_value}",
+    )
+    return monitor
+
+
+@router.patch("/{module_key}/monitors/{monitor_id}/schedule", response_model=MonitorOut)
+async def update_monitor_schedule(
+    payload: MonitorScheduleUpdate,
+    monitor_id: uuid.UUID,
+    module_key: str = Path(...),
+    meta=Depends(module_access),
+    user: User = Depends(get_current_user),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> Monitor:
+    """Zamanlanmis tarama araligini ayarlar (None => sadece manuel)."""
+    monitor = await _get_owned_monitor(monitor_id, module_key, tenant_id, db)
+    monitor.scan_interval_minutes = payload.scan_interval_minutes
+    await db.flush()
+    await db.refresh(monitor)
+    record_audit(
+        db,
+        organization_id=tenant_id,
+        user_id=user.id,
+        action="monitor.schedule",
+        target_type="monitor",
+        target_id=str(monitor.id),
+        detail=f"aralik={payload.scan_interval_minutes}",
+    )
     return monitor
 
 
@@ -99,10 +144,19 @@ async def delete_monitor(
     monitor_id: uuid.UUID,
     module_key: str = Path(...),
     meta=Depends(module_access),
+    user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     monitor = await _get_owned_monitor(monitor_id, module_key, tenant_id, db)
+    record_audit(
+        db,
+        organization_id=tenant_id,
+        user_id=user.id,
+        action="monitor.delete",
+        target_type="monitor",
+        target_id=str(monitor.id),
+    )
     await db.delete(monitor)
 
 

@@ -23,7 +23,7 @@ CATALOG: list[ModuleMeta] = [
         description="Web/mobil acik tespiti, pentest yuzeyi, bounty",
         category="security",
         asset_types=["domain", "ip", "url"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="illegal_site",
@@ -39,7 +39,7 @@ CATALOG: list[ModuleMeta] = [
         description="Taklit site, logo korsanligi, domain izleme",
         category="brand",
         asset_types=["domain", "brand"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="competitor_intel",
@@ -47,7 +47,7 @@ CATALOG: list[ModuleMeta] = [
         description="Fiyat, urun, ise alim takibi",
         category="competitor",
         asset_types=["domain", "company"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="financial_crime",
@@ -55,7 +55,7 @@ CATALOG: list[ModuleMeta] = [
         description="Kripto ponzi, para aklama, MASAK",
         category="financial",
         asset_types=["wallet", "company", "keyword"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="disinformation",
@@ -63,7 +63,7 @@ CATALOG: list[ModuleMeta] = [
         description="Fake haber, bot hesap, manipulasyon",
         category="disinformation",
         asset_types=["brand", "keyword"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="due_diligence",
@@ -71,7 +71,7 @@ CATALOG: list[ModuleMeta] = [
         description="Sirket risk, mahkeme, icra takibi",
         category="due_diligence",
         asset_types=["company"],
-        enabled=False,
+        enabled=True,
     ),
     ModuleMeta(
         key="ai_testing",
@@ -79,7 +79,7 @@ CATALOG: list[ModuleMeta] = [
         description="Prompt injection, model guvenligi",
         category="ai_testing",
         asset_types=["endpoint"],
-        enabled=False,
+        enabled=True,
     ),
 ]
 

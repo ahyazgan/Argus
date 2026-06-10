@@ -19,6 +19,8 @@ dependencies = [
     "email-validator>=2.2",
     # Guvenlik
     "passlib[bcrypt]>=1.7.4",
+    # bcrypt 4.x passlib 1.7.4 ile uyumsuz (__about__ kaldirildi) -> pinle
+    "bcrypt>=3.2,<4.0",
     "pyjwt>=2.10",
     # Gorev kuyrugu
     "celery[redis]>=5.4",
@@ -49,6 +51,9 @@ target-version = "py312"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: canli dis API'lere karsi testler (kimlik bilgisi gerektirir; yoksa atlanir)",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    audit,
     auth,
     billing,
     findings,
@@ -12,6 +13,7 @@ from app.api.v1 import (
     monitors,
     reports,
     settings as settings_api,
+    team,
 )
 
 api_router = APIRouter()
@@ -25,3 +27,5 @@ api_router.include_router(findings.router, prefix="/findings", tags=["findings"]
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 api_router.include_router(settings_api.router, prefix="/settings", tags=["settings"])
+api_router.include_router(team.router, prefix="/team", tags=["team"])
+api_router.include_router(audit.router, prefix="/audit", tags=["audit"])

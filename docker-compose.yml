@@ -54,6 +54,19 @@ services:
       - ./backend:/app
     command: celery -A app.worker.celery_app worker --loglevel=info
 
+  # Zamanlanmis taramalar: beat, vadesi gelen monitorleri periyodik olarak dispatch eder.
+  beat:
+    build: ./backend
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A app.worker.celery_app beat --loglevel=info
+
   frontend:
     build: ./frontend
     env_file: .env
