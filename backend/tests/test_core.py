@@ -548,3 +548,29 @@ def test_findings_to_csv_escapes_commas_and_empty():
     out = findings_to_csv(rows)
     assert '"a, b ve c"' in out  # virgul iceren alan tirnaklanir
     assert findings_to_csv([]).strip().count("\n") == 0  # sadece baslik satiri
+
+
+# --- API anahtari saf mantik ---
+
+def test_api_key_generation_and_verify():
+    from app.core.security import (
+        API_KEY_PREFIX,
+        generate_api_key,
+        hash_api_key,
+        verify_api_key,
+    )
+
+    raw, prefix, hashed = generate_api_key()
+    assert raw.startswith(API_KEY_PREFIX)
+    assert prefix.startswith(API_KEY_PREFIX) and prefix.endswith("…")
+    assert len(hashed) == 64  # sha256 hex
+    assert hashed == hash_api_key(raw)
+    assert verify_api_key(raw, hashed)
+    assert not verify_api_key(raw + "x", hashed)
+
+
+def test_api_keys_are_unique():
+    from app.core.security import generate_api_key
+
+    keys = {generate_api_key()[0] for _ in range(50)}
+    assert len(keys) == 50  # carpisma yok

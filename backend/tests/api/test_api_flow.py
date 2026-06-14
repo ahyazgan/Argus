@@ -117,6 +117,44 @@ async def test_rbac_member_cannot_create_user(client):
     assert forbidden.status_code == 403
 
 
+async def test_api_key_create_use_and_revoke(client):
+    token, _ = await _register(client)
+    h = _auth(token)
+
+    # Anahtar olustur (ham anahtar yalnizca burada doner)
+    created = await client.post("/api/v1/api-keys", headers=h, json={"name": "CI anahtari"})
+    assert created.status_code == 201, created.text
+    body = created.json()
+    raw = body["key"]
+    assert raw.startswith("ak_")
+    assert body["prefix"].endswith("…")
+    key_id = body["id"]
+
+    # X-API-Key ile (JWT olmadan) salt-okuma erisimi calismali
+    via_header = await client.get("/api/v1/findings/stats", headers={"X-API-Key": raw})
+    assert via_header.status_code == 200
+    assert "by_severity" in via_header.json()
+
+    # Authorization: Bearer ak_... de kabul edilmeli
+    via_bearer = await client.get("/api/v1/findings/stats", headers={"Authorization": f"Bearer {raw}"})
+    assert via_bearer.status_code == 200
+
+    # Listede gorunur, ham anahtar gizli (yalnizca onek)
+    lst = await client.get("/api/v1/api-keys", headers=h)
+    assert lst.status_code == 200 and len(lst.json()) == 1
+    assert "key" not in lst.json()[0]
+
+    # API anahtariyla yeni anahtar olusturulamaz (require_role JWT kullanicisi ister)
+    mgmt = await client.post("/api/v1/api-keys", headers={"X-API-Key": raw}, json={"name": "x"})
+    assert mgmt.status_code == 401
+
+    # Iptal et -> artik 401
+    rev = await client.delete(f"/api/v1/api-keys/{key_id}", headers=h)
+    assert rev.status_code == 204
+    after = await client.get("/api/v1/findings/stats", headers={"X-API-Key": raw})
+    assert after.status_code == 401
+
+
 async def test_finding_assign_and_comment(client):
     token, _ = await _register(client)
     h = _auth(token)

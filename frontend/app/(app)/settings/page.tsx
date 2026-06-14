@@ -20,6 +20,15 @@ type Settings = {
   has_api_key: boolean;
 };
 
+type ApiKeyItem = {
+  id: string;
+  name: string;
+  prefix: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [webhook, setWebhook] = useState("");
@@ -34,12 +43,19 @@ export default function SettingsPage() {
   const [govUrl, setGovUrl] = useState("");
   const [govToken, setGovToken] = useState("");
   const [reportSchedule, setReportSchedule] = useState("none");
-  const [apiKey, setApiKey] = useState("");
+  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [freshKey, setFreshKey] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
+  async function loadKeys() {
+    setKeys(await api<ApiKeyItem[]>("/api-keys"));
+  }
+
   async function load() {
     const data = await api<Settings>("/settings");
+    await loadKeys();
     setS(data);
     setWebhook(data.webhook_url || "");
     setSlack(data.slack_webhook_url || "");
@@ -89,10 +105,28 @@ export default function SettingsPage() {
     }
   }
 
-  async function genKey() {
-    const data = await api<{ api_key: string }>("/settings/api-key", { method: "POST" });
-    setApiKey(data.api_key);
-    await load();
+  async function createKey() {
+    setErr("");
+    const name = newKeyName.trim();
+    if (!name) return;
+    try {
+      const data = await api<ApiKeyItem & { key: string }>("/api-keys", { body: { name } });
+      setFreshKey(data.key);
+      setNewKeyName("");
+      await loadKeys();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function revokeKey(id: string) {
+    setErr("");
+    try {
+      await api(`/api-keys/${id}`, { method: "DELETE" });
+      await loadKeys();
+    } catch (e: any) {
+      setErr(e.message);
+    }
   }
 
   return (
@@ -227,21 +261,93 @@ export default function SettingsPage() {
       </form>
 
       <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <h2 className="font-semibold">REST API anahtarı</h2>
+        <h2 className="font-semibold">REST API anahtarları</h2>
         <p className="text-sm text-slate-400">
-          Dış sistemlerin (SIEM, otomasyon) Argus'a bağlanması için. {s?.has_api_key ? "Tanımlı." : "Henüz oluşturulmadı."}
+          Dış sistemlerin (SIEM, otomasyon) Argus'a salt-okuma erişimi için.{" "}
+          <code className="text-slate-300">X-API-Key</code> başlığıyla veya{" "}
+          <code className="text-slate-300">Authorization: Bearer ak_…</code> ile kullanın.
         </p>
-        {apiKey && (
-          <code className="block break-all rounded-lg bg-slate-800 p-3 text-xs text-green-300">
-            {apiKey}
-          </code>
+
+        {freshKey && (
+          <div className="rounded-lg border border-emerald-700 bg-emerald-500/10 p-3">
+            <p className="text-xs text-emerald-300">
+              Anahtar oluşturuldu — bu değer yalnızca bir kez gösterilir, güvenli bir yere kaydedin:
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="block flex-1 break-all rounded bg-slate-900 p-2 text-xs text-emerald-200">
+                {freshKey}
+              </code>
+              <button
+                onClick={() => navigator.clipboard?.writeText(freshKey)}
+                className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+              >
+                Kopyala
+              </button>
+              <button
+                onClick={() => setFreshKey("")}
+                className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+              >
+                Gizle
+              </button>
+            </div>
+          </div>
         )}
-        <button
-          onClick={genKey}
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
-        >
-          {s?.has_api_key ? "Yeniden oluştur" : "API anahtarı oluştur"}
-        </button>
+
+        <div className="space-y-2">
+          {keys.length === 0 && (
+            <p className="text-sm text-slate-500">Henüz anahtar yok.</p>
+          )}
+          {keys.map((k) => (
+            <div
+              key={k.id}
+              className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/40 p-3"
+            >
+              <div>
+                <div className="text-sm font-medium">
+                  {k.name}{" "}
+                  <span className="font-mono text-xs text-slate-500">{k.prefix}</span>
+                  {k.revoked_at && (
+                    <span className="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-300">
+                      iptal edildi
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {k.last_used_at
+                    ? `son kullanım: ${new Date(k.last_used_at).toLocaleString("tr-TR")}`
+                    : "henüz kullanılmadı"}
+                </div>
+              </div>
+              {!k.revoked_at && (
+                <button
+                  onClick={() => revokeKey(k.id)}
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-800"
+                >
+                  İptal et
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && createKey()}
+            placeholder="Anahtar adı (örn. SIEM entegrasyonu)"
+            className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
+          />
+          <button
+            onClick={createKey}
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold hover:bg-sky-500"
+          >
+            + Anahtar oluştur
+          </button>
+        </div>
+        <p className="text-xs text-slate-500">
+          Anahtar oluşturma/iptal yalnızca sahip ve yöneticiler içindir.
+        </p>
       </div>
     </div>
   );

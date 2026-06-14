@@ -2,19 +2,23 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import decode_token
+from app.core.security import API_KEY_PREFIX, decode_token, hash_api_key
+from app.models.api_key import ApiKey
 from app.models.subscription import Subscription
 from app.models.user import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# Programatik erisim icin API anahtari basligi (Swagger'da gorunur, zorunlu degil)
+api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 _CRED_EXC = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -23,10 +27,7 @@ _CRED_EXC = HTTPException(
 )
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
+async def _authenticate_user(token: str, db: AsyncSession) -> User:
     try:
         payload = decode_token(token)
         if payload.get("type") != "access":
@@ -44,8 +45,50 @@ async def get_current_user(
     return user
 
 
-def get_current_tenant_id(user: User = Depends(get_current_user)) -> uuid.UUID:
-    """Gecerli kullanicinin tenant (organization) kimligi - satir kapsama icin."""
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _authenticate_user(token, db)
+
+
+def _raw_api_key(request: Request, header_key: str | None) -> str | None:
+    """API anahtarini X-API-Key veya 'Authorization: Bearer ak_...' icinden cikarir."""
+    if header_key and header_key.startswith(API_KEY_PREFIX):
+        return header_key
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        candidate = auth[7:]
+        if candidate.startswith(API_KEY_PREFIX):
+            return candidate
+    return None
+
+
+async def get_current_tenant_id(
+    request: Request,
+    header_key: str | None = Security(api_key_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    """Tenant kimligini API anahtari ya da JWT'den cozer (satir kapsama icin).
+
+    Once API anahtari (X-API-Key veya Bearer ak_...) denenir; yoksa JWT'ye duser.
+    """
+    raw_key = _raw_api_key(request, header_key)
+    if raw_key:
+        rec = (
+            await db.execute(select(ApiKey).where(ApiKey.hashed_key == hash_api_key(raw_key)))
+        ).scalar_one_or_none()
+        if rec is None or rec.revoked_at is not None:
+            raise _CRED_EXC
+        rec.last_used_at = datetime.now(timezone.utc)
+        return rec.organization_id
+
+    # JWT'ye dus
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not token:
+        raise _CRED_EXC
+    user = await _authenticate_user(token, db)
     return user.organization_id
 
 
