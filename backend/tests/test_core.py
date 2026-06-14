@@ -694,3 +694,24 @@ def test_parse_shodan_maps_services_and_feeds_heuristic():
     assert security_heuristic(pg, "203.0.113.10", "ip").severity == "critical"
     assert security_heuristic(cve, "203.0.113.10", "ip").severity == "critical"
     assert parse_shodan({}, "203.0.113.10") == []  # bos yanit -> bos
+
+
+def test_dns_has_answer_and_brand_schema():
+    from app.modules.brand_protection.collectors import dns_has_answer
+
+    # Google DoH 'resolve' ornek yanitlari
+    assert dns_has_answer({"Status": 0, "Answer": [{"name": "x.com", "type": 1, "data": "1.2.3.4"}]}) is True
+    assert dns_has_answer({"Status": 3}) is False  # NXDOMAIN -> kayit yok
+    assert dns_has_answer({}) is False
+
+    # DNS sonuclari brand heuristic semasini dogru besler: kayitli + MX -> high
+    a_record = dns_has_answer({"Answer": [{"data": "1.2.3.4"}]})
+    mx_record = a_record and dns_has_answer({"Answer": [{"data": "10 mail.x.com"}]})
+    rec = {
+        "variant_domain": "markam-login.com",
+        "brand": "markam",
+        "technique": "combosquat",
+        "registered": a_record,
+        "has_mx": mx_record,
+    }
+    assert brand_heuristic(rec, "markam.com", "brand").severity == "high"

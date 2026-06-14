@@ -21,6 +21,14 @@ from app.core.config import settings
 from app.core_services.osint.base import Collector
 
 
+def dns_has_answer(payload: dict) -> bool:
+    """Google DoH 'resolve' yanitinda cozumlenmis kayit (Answer) var mi (saf, test edilebilir).
+
+    NXDOMAIN / bos yanit -> False; en az bir Answer -> True.
+    """
+    return bool(payload.get("Answer"))
+
+
 def _doh_query(name: str, rtype: str) -> bool:
     """Google DNS-over-HTTPS ile bir kaydin (A/MX) var olup olmadigini sorgular.
 
@@ -32,8 +40,7 @@ def _doh_query(name: str, rtype: str) -> bool:
             params={"name": name, "type": rtype},
             timeout=8.0,
         )
-        data = resp.json()
-        return bool(data.get("Answer"))
+        return dns_has_answer(resp.json())
     except (httpx.HTTPError, ValueError):
         return False
 
