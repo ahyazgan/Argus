@@ -49,11 +49,35 @@ class DemoLeakCollector(Collector):
         return records
 
 
+def parse_hibp(breaches: list[dict], asset_value: str) -> list[dict]:
+    """HIBP v3 'breachedaccount' yanitini sizinti kayitlarina cevirir (saf, test edilebilir).
+
+    Cikti semasi darkweb analyzer/heuristic ile uyumludur: parola sinifi sizan
+    bulgularda 'password' anahtari bulunur (heuristic bunu 'high' kabul eder).
+    """
+    records: list[dict] = []
+    for b in breaches or []:
+        data_classes = b.get("DataClasses", []) or []
+        has_pw = any("password" in str(c).lower() for c in data_classes)
+        rec = {
+            "source": f"hibp:{b.get('Name', 'breach')}",
+            "asset_type": "email",
+            "asset_value": asset_value,
+            "breach_name": b.get("Name"),
+            "breach_date": b.get("BreachDate"),
+            "leaked_field": "email",
+            "data_classes": data_classes,
+        }
+        if has_pw:
+            rec["password"] = "*** (sizan veri sinifinda parola mevcut)"
+        records.append(rec)
+    return records
+
+
 class HIBPCollector(Collector):
     """HaveIBeenPwned tarzi ucretli sizinti API'si (anahtar varsa).
 
     Anahtar yapilandirilmamissa bos liste doner (demo akisini bozmaz).
-    Gercek entegrasyon icin: settings'e HIBP_API_KEY ekleyin ve asagiyi doldurun.
     """
 
     name = "hibp"
@@ -75,24 +99,7 @@ class HIBPCollector(Collector):
             breaches = resp.json()
         except (httpx.HTTPError, ValueError):
             return []  # API hatasi demo/tarama akisini bozmasin
-
-        records: list[dict] = []
-        for b in breaches:
-            data_classes = b.get("DataClasses", []) or []
-            has_pw = any("password" in str(c).lower() for c in data_classes)
-            rec = {
-                "source": f"{self.name}:{b.get('Name', 'breach')}",
-                "asset_type": asset_type,
-                "asset_value": asset_value,
-                "breach_name": b.get("Name"),
-                "breach_date": b.get("BreachDate"),
-                "leaked_field": "email",
-                "data_classes": data_classes,
-            }
-            if has_pw:
-                rec["password"] = "*** (sizan veri sinifinda parola mevcut)"
-            records.append(rec)
-        return records
+        return parse_hibp(breaches, asset_value)
 
 
 def get_collectors() -> list[Collector]:

@@ -71,6 +71,50 @@ class SurfaceProbeCollector(Collector):
         return records
 
 
+# Hassas portlar (DB / uzak masaustu) -> exposed_service kritik kabul edilir
+_SENSITIVE_PORTS = {3389, 5432, 6379, 9200, 27017, 3306, 1433}
+
+
+def parse_shodan(data: dict, asset_value: str) -> list[dict]:
+    """Shodan 'host' yanitini guvenlik bulgularina cevirir (saf, test edilebilir).
+
+    Cikti semasi security_scan analyzer/heuristic ile uyumludur: issue_type/service/
+    port/sensitive/target alanlari uretilir (hassas servis -> 'critical').
+    """
+    records: list[dict] = []
+    # Acik servisler/portlar
+    for svc in data.get("data", []) or []:
+        port = svc.get("port")
+        product = svc.get("product") or svc.get("_shodan", {}).get("module", "servis")
+        records.append(
+            {
+                "source": "shodan",
+                "asset_type": "ip",
+                "asset_value": asset_value,
+                "target": asset_value,
+                "issue_type": "exposed_service",
+                "service": str(product),
+                "port": port,
+                "sensitive": port in _SENSITIVE_PORTS,
+            }
+        )
+    # Shodan'in bildirdigi bilinen zafiyetler (varsa) - bilgi amacli kayit
+    for cve in (data.get("vulns") or [])[:10]:
+        records.append(
+            {
+                "source": "shodan:vulns",
+                "asset_type": "ip",
+                "asset_value": asset_value,
+                "target": asset_value,
+                "issue_type": "exposed_service",
+                "service": f"Bilinen zafiyet {cve}",
+                "port": "-",
+                "sensitive": True,
+            }
+        )
+    return records
+
+
 class ShodanCollector(Collector):
     """Shodan tarzi pasif yuzey/port API'si (anahtar varsa).
 
@@ -95,41 +139,7 @@ class ShodanCollector(Collector):
             data = resp.json()
         except (httpx.HTTPError, ValueError):
             return []  # API hatasi tarama akisini bozmasin
-
-        records: list[dict] = []
-        # Acik servisler/portlar -> exposed_service bulgulari (analyzer ile uyumlu sema)
-        for svc in data.get("data", []) or []:
-            port = svc.get("port")
-            product = svc.get("product") or svc.get("_shodan", {}).get("module", "servis")
-            # Hassas portlar (DB/uzak masaustu) kritik kabul edilir
-            sensitive = port in {3389, 5432, 6379, 9200, 27017, 3306, 1433}
-            records.append(
-                {
-                    "source": self.name,
-                    "asset_type": asset_type,
-                    "asset_value": asset_value,
-                    "target": asset_value,
-                    "issue_type": "exposed_service",
-                    "service": str(product),
-                    "port": port,
-                    "sensitive": sensitive,
-                }
-            )
-        # Shodan'in bildirdigi bilinen zafiyetler (varsa) - bilgi amacli kayit
-        for cve in (data.get("vulns") or [])[:10]:
-            records.append(
-                {
-                    "source": f"{self.name}:vulns",
-                    "asset_type": asset_type,
-                    "asset_value": asset_value,
-                    "target": asset_value,
-                    "issue_type": "exposed_service",
-                    "service": f"Bilinen zafiyet {cve}",
-                    "port": "-",
-                    "sensitive": True,
-                }
-            )
-        return records
+        return parse_shodan(data, asset_value)
 
 
 def get_collectors() -> list[Collector]:

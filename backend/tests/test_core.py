@@ -647,3 +647,50 @@ def test_send_webhook_signs_transmitted_body(monkeypatch):
     eng.send_webhook("https://alici.example/wh", {"event": "x"})
     assert captured["content"] is None and captured["json"] == {"event": "x"}
     assert "X-Argus-Signature" not in (captured["headers"] or {})
+
+
+# --- Gercek-API yanit ayristirma (saf) + analyzer sema uyumu ---
+
+def test_parse_hibp_maps_password_class_and_feeds_heuristic():
+    from app.modules.darkweb.collectors import parse_hibp
+
+    # HIBP v3 'breachedaccount' (truncateResponse=false) ornek yaniti
+    payload = [
+        {"Name": "Adobe", "BreachDate": "2013-10-04", "DataClasses": ["Email addresses", "Passwords"]},
+        {"Name": "Forum", "BreachDate": "2016-01-01", "DataClasses": ["Email addresses"]},
+    ]
+    recs = parse_hibp(payload, "kullanici@ornek.com")
+    assert len(recs) == 2
+    assert recs[0]["breach_name"] == "Adobe" and recs[0]["breach_date"] == "2013-10-04"
+    # Parola sinifi sizan kayitta 'password' anahtari olmali; digerinde olmamali
+    assert "password" in recs[0] and "password" not in recs[1]
+
+    # Sema, darkweb heuristic'ini dogru besler: parola -> high, parolasiz -> medium
+    assert darkweb_heuristic(recs[0], "kullanici@ornek.com", "email").severity == "high"
+    assert darkweb_heuristic(recs[1], "kullanici@ornek.com", "email").severity == "medium"
+    assert parse_hibp([], "x@y.com") == []  # bos/yok -> bos
+
+
+def test_parse_shodan_maps_services_and_feeds_heuristic():
+    from app.modules.security_scan.collectors import parse_shodan
+
+    # Shodan 'host' ornek yaniti: hassas (5432) + zararsiz (80) servis + bilinen CVE
+    data = {
+        "data": [
+            {"port": 5432, "product": "PostgreSQL"},
+            {"port": 80, "_shodan": {"module": "http"}},
+        ],
+        "vulns": ["CVE-2021-44228"],
+    }
+    recs = parse_shodan(data, "203.0.113.10")
+    assert len(recs) == 3
+    pg = next(r for r in recs if r["port"] == 5432)
+    http = next(r for r in recs if r["port"] == 80)
+    cve = next(r for r in recs if str(r["service"]).startswith("Bilinen zafiyet"))
+    assert pg["sensitive"] is True and http["sensitive"] is False
+    assert all(r["issue_type"] == "exposed_service" and r["target"] == "203.0.113.10" for r in recs)
+
+    # Sema, security heuristic'ini dogru besler: hassas servis -> critical
+    assert security_heuristic(pg, "203.0.113.10", "ip").severity == "critical"
+    assert security_heuristic(cve, "203.0.113.10", "ip").severity == "critical"
+    assert parse_shodan({}, "203.0.113.10") == []  # bos yanit -> bos
