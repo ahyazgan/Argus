@@ -7,13 +7,21 @@ hatasi digerlerini etkilemez.
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
+import json
 import smtplib
+import time
 from dataclasses import dataclass
 from email.message import EmailMessage
 
 import httpx
 
 from app.core.config import settings
+
+# Giden webhook HMAC imzasi (alici tarafin dogrulamasi icin)
+WEBHOOK_SIGNATURE_HEADER = "X-Argus-Signature"
+WEBHOOK_TIMESTAMP_HEADER = "X-Argus-Timestamp"
 
 _SEVERITY_EMOJI = {
     "critical": "🔴",
@@ -44,6 +52,8 @@ class OutputChannels:
     """Bir kurumun yapilandirilmis cikti kanallari (None => devre disi)."""
 
     webhook_url: str | None = None
+    # Genel webhook icin HMAC imza sirri (None => imzasiz gonderilir)
+    webhook_secret: str | None = None
     slack_webhook_url: str | None = None
     github_repo: str | None = None  # "owner/repo"
     github_token: str | None = None
@@ -152,11 +162,64 @@ def gov_report_payload(
     }
 
 
+# --- Webhook HMAC imzasi (saf, test edilebilir) ---
+
+def sign_webhook(secret: str, body: bytes, timestamp: str) -> str:
+    """Govde + zaman damgasi uzerinden HMAC-SHA256 (hex). Imzalanan: '<ts>.<body>'."""
+    mac = hmac.new(secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256)
+    return mac.hexdigest()
+
+
+def webhook_signature_headers(
+    secret: str, body: bytes, timestamp: str | None = None
+) -> dict[str, str]:
+    """Imzali webhook icin gonderilecek basliklar. Govde tam olarak `body` olmalidir."""
+    ts = timestamp or str(int(time.time()))
+    return {
+        WEBHOOK_TIMESTAMP_HEADER: ts,
+        WEBHOOK_SIGNATURE_HEADER: f"sha256={sign_webhook(secret, body, ts)}",
+        "Content-Type": "application/json",
+    }
+
+
+def verify_webhook_signature(
+    secret: str,
+    body: bytes,
+    timestamp: str,
+    signature: str,
+    tolerance_seconds: int = 300,
+    now: int | None = None,
+) -> bool:
+    """Alici tarafin (ve testlerin) imza dogrulamasi - sabit-zamanli + tekrar penceresi."""
+    if signature.startswith("sha256="):
+        signature = signature[len("sha256="):]
+    expected = sign_webhook(secret, body, timestamp)
+    if not hmac.compare_digest(expected, signature):
+        return False
+    try:
+        ts = int(timestamp)
+    except (ValueError, TypeError):
+        return False
+    current = now if now is not None else int(time.time())
+    return abs(current - ts) <= tolerance_seconds
+
+
 # --- Gondericiler ---
 
-def send_webhook(url: str, payload: dict) -> bool:
+def send_webhook(url: str, payload: dict, secret: str | None = None) -> bool:
+    """Genel webhook gonderir. `secret` verilirse govdeyi HMAC-SHA256 ile imzalar.
+
+    Imzalanan govde, gonderilen ham bayt diziisiyle birebir ayni olmalidir; bu yuzden
+    imzali durumda JSON tek sefer kanonik olarak serilestirilip `content` ile yollanir.
+    """
     try:
-        resp = httpx.post(url, json=payload, timeout=10.0)
+        if secret:
+            body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+            resp = httpx.post(
+                url, content=body, headers=webhook_signature_headers(secret, body), timeout=10.0
+            )
+        else:
+            resp = httpx.post(url, json=payload, timeout=10.0)
         return resp.is_success
     except httpx.HTTPError:
         return False
@@ -276,6 +339,7 @@ def notify_finding(
                 "recommendation": recommendation,
                 "asset_value": asset_value,
             },
+            secret=channels.webhook_secret,
         )
     if channels.github_repo and channels.github_token:
         results["github"] = create_github_issue(

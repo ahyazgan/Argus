@@ -39,6 +39,7 @@ def _channels_for(org: Organization | None) -> OutputChannels:
         return OutputChannels()
     return OutputChannels(
         webhook_url=org.webhook_url,
+        webhook_secret=org.webhook_secret,
         slack_webhook_url=org.slack_webhook_url,
         github_repo=org.github_repo,
         github_token=org.github_token,

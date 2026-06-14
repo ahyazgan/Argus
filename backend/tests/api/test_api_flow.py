@@ -38,6 +38,26 @@ async def test_requires_auth(client):
     assert resp.status_code == 401
 
 
+async def test_webhook_secret_generate_and_view(client):
+    token, _ = await _register(client)
+    h = _auth(token)
+
+    # Baslangicta tanimli degil
+    s0 = await client.get("/api/v1/settings", headers=h)
+    assert s0.status_code == 200 and s0.json()["has_webhook_secret"] is False
+
+    # Uret -> whsec_ doner
+    gen = await client.post("/api/v1/settings/webhook-secret", headers=h)
+    assert gen.status_code == 200
+    secret = gen.json()["webhook_secret"]
+    assert secret.startswith("whsec_")
+
+    # Artik tanimli; ham sir GET'te DONMEZ (yalnizca bayrak)
+    s1 = await client.get("/api/v1/settings", headers=h)
+    assert s1.json()["has_webhook_secret"] is True
+    assert "webhook_secret" not in s1.json()
+
+
 async def test_module_toggle_and_monitor_flow(client):
     token, _ = await _register(client)
     h = _auth(token)

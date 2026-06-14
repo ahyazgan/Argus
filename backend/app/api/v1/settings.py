@@ -20,6 +20,7 @@ router = APIRouter()
 class SettingsOut(BaseModel):
     organization_name: str
     webhook_url: str | None
+    has_webhook_secret: bool
     slack_webhook_url: str | None
     notify_email: str | None
     # GitHub / Jira cikti kanallari (token'lar govdede DONMEZ; yalnizca tanimli mi bilgisi)
@@ -54,6 +55,10 @@ class ApiKeyOut(BaseModel):
     api_key: str
 
 
+class WebhookSecretOut(BaseModel):
+    webhook_secret: str
+
+
 async def _get_org(tenant_id: uuid.UUID, db: AsyncSession) -> Organization:
     org = await db.get(Organization, tenant_id)
     assert org is not None
@@ -64,6 +69,7 @@ def _view(org: Organization) -> SettingsOut:
     return SettingsOut(
         organization_name=org.name,
         webhook_url=org.webhook_url,
+        has_webhook_secret=bool(org.webhook_secret),
         slack_webhook_url=org.slack_webhook_url,
         notify_email=org.notify_email,
         github_repo=org.github_repo,
@@ -142,3 +148,24 @@ async def regenerate_api_key(
     org.api_key = "argus_" + secrets.token_urlsafe(32)
     await db.flush()
     return ApiKeyOut(api_key=org.api_key)
+
+
+@router.post("/webhook-secret", response_model=WebhookSecretOut)
+async def regenerate_webhook_secret(
+    user: User = Depends(get_current_user),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> WebhookSecretOut:
+    """Genel webhook HMAC imza sirrini (yeniden) uretir. Hem Argus hem alici taraf bilir."""
+    org = await _get_org(tenant_id, db)
+    org.webhook_secret = "whsec_" + secrets.token_urlsafe(32)
+    record_audit(
+        db,
+        organization_id=tenant_id,
+        user_id=user.id,
+        action="settings.webhook_secret",
+        target_type="organization",
+        target_id=str(tenant_id),
+    )
+    await db.flush()
+    return WebhookSecretOut(webhook_secret=org.webhook_secret)

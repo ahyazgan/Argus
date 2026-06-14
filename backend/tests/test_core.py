@@ -574,3 +574,76 @@ def test_api_keys_are_unique():
 
     keys = {generate_api_key()[0] for _ in range(50)}
     assert len(keys) == 50  # carpisma yok
+
+
+# --- Webhook HMAC imzasi saf mantik ---
+
+def test_webhook_signature_roundtrip():
+    from app.core_services.notifications.engine import (
+        sign_webhook,
+        verify_webhook_signature,
+        webhook_signature_headers,
+    )
+
+    secret = "whsec_test"
+    body = b'{"event":"finding.created"}'
+    headers = webhook_signature_headers(secret, body, timestamp="1000")
+    assert headers["X-Argus-Timestamp"] == "1000"
+    assert headers["X-Argus-Signature"] == "sha256=" + sign_webhook(secret, body, "1000")
+    assert headers["Content-Type"] == "application/json"
+
+    # Gecerli imza + zaman penceresi
+    sig = headers["X-Argus-Signature"]
+    assert verify_webhook_signature(secret, body, "1000", sig, now=1100)
+    # 'sha256=' oneki olmadan da kabul edilir
+    assert verify_webhook_signature(secret, body, "1000", sig.split("=", 1)[1], now=1100)
+
+
+def test_webhook_signature_rejects_tamper_secret_and_replay():
+    from app.core_services.notifications.engine import (
+        sign_webhook,
+        verify_webhook_signature,
+    )
+
+    secret = "whsec_test"
+    body = b'{"event":"finding.created"}'
+    sig = sign_webhook(secret, body, "1000")
+
+    # Govde degisirse imza tutmaz
+    assert not verify_webhook_signature(secret, b'{"event":"x"}', "1000", sig, now=1100)
+    # Yanlis sir
+    assert not verify_webhook_signature("baska", body, "1000", sig, now=1100)
+    # Tekrar penceresi disinda (varsayilan 300s)
+    assert not verify_webhook_signature(secret, body, "1000", sig, now=2000)
+    # Bozuk zaman damgasi
+    assert not verify_webhook_signature(secret, body, "abc", sig, now=1100)
+
+
+def test_send_webhook_signs_transmitted_body(monkeypatch):
+    """Imzali gonderimde gonderilen ham govde imzayla birebir dogrulanabilmeli."""
+    import app.core_services.notifications.engine as eng
+
+    captured = {}
+
+    class _Resp:
+        is_success = True
+
+    def fake_post(url, content=None, json=None, headers=None, timeout=None):
+        captured.update(url=url, content=content, json=json, headers=headers or {})
+        return _Resp()
+
+    monkeypatch.setattr(eng.httpx, "post", fake_post)
+
+    ok = eng.send_webhook("https://alici.example/wh", {"event": "finding.created", "x": 1}, secret="whsec_x")
+    assert ok
+    # json= degil content= ile gonderilmeli (imzalanan baytlarla ayni olmasi icin)
+    assert captured["json"] is None and isinstance(captured["content"], bytes)
+    ts = captured["headers"]["X-Argus-Timestamp"]
+    sig = captured["headers"]["X-Argus-Signature"]
+    assert eng.verify_webhook_signature("whsec_x", captured["content"], ts, sig)
+
+    # Sir yoksa imzasiz (json=) gider
+    captured.clear()
+    eng.send_webhook("https://alici.example/wh", {"event": "x"})
+    assert captured["content"] is None and captured["json"] == {"event": "x"}
+    assert "X-Argus-Signature" not in (captured["headers"] or {})

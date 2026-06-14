@@ -24,6 +24,8 @@ class Organization(Base, TimestampMixin):
 
     # Bildirim kanallari (Slack/webhook) - yeni bulguda tetiklenir
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Genel webhook icin HMAC-SHA256 imza sirri (alici tarafin dogrulamasi icin)
+    webhook_secret: Mapped[str | None] = mapped_column(String(120), nullable=True)
     slack_webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # E-posta bildirimi (adres bossa atlanir; SMTP ayarlari da gereklidir)
     notify_email: Mapped[str | None] = mapped_column(String(320), nullable=True)

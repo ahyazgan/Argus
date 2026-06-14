@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 type Settings = {
   organization_name: string;
   webhook_url: string | null;
+  has_webhook_secret: boolean;
   slack_webhook_url: string | null;
   notify_email: string | null;
   github_repo: string | null;
@@ -46,6 +47,7 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [newKeyName, setNewKeyName] = useState("");
   const [freshKey, setFreshKey] = useState("");
+  const [freshSecret, setFreshSecret] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
@@ -119,6 +121,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function genWebhookSecret() {
+    setErr("");
+    try {
+      const data = await api<{ webhook_secret: string }>("/settings/webhook-secret", {
+        method: "POST",
+      });
+      setFreshSecret(data.webhook_secret);
+      await load();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
   async function revokeKey(id: string) {
     setErr("");
     try {
@@ -149,6 +164,11 @@ export default function SettingsPage() {
             placeholder="https://ornek.com/webhook"
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-500"
           />
+          <p className="mt-1 text-xs text-slate-500">
+            İmza sırrı tanımlıysa istekler <code className="text-slate-400">X-Argus-Signature</code>{" "}
+            (HMAC-SHA256) ve <code className="text-slate-400">X-Argus-Timestamp</code> başlıklarıyla
+            imzalanır.
+          </p>
         </div>
         <div>
           <label className="text-sm text-slate-400">Slack webhook URL</label>
@@ -259,6 +279,44 @@ export default function SettingsPage() {
           Kaydet
         </button>
       </form>
+
+      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <h2 className="font-semibold">Webhook imza sırrı</h2>
+        <p className="text-sm text-slate-400">
+          Genel webhook isteklerini HMAC-SHA256 ile imzalar; alıcı taraf gövdeyi bu sır ile
+          doğrular. {s?.has_webhook_secret ? "Tanımlı." : "Henüz oluşturulmadı."}
+        </p>
+        {freshSecret && (
+          <div className="rounded-lg border border-emerald-700 bg-emerald-500/10 p-3">
+            <p className="text-xs text-emerald-300">
+              İmza sırrı — alıcı sistemde bu değeri saklayın (tekrar gösterilmez):
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="block flex-1 break-all rounded bg-slate-900 p-2 text-xs text-emerald-200">
+                {freshSecret}
+              </code>
+              <button
+                onClick={() => navigator.clipboard?.writeText(freshSecret)}
+                className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+              >
+                Kopyala
+              </button>
+              <button
+                onClick={() => setFreshSecret("")}
+                className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+              >
+                Gizle
+              </button>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={genWebhookSecret}
+          className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+        >
+          {s?.has_webhook_secret ? "Yeniden oluştur" : "İmza sırrı oluştur"}
+        </button>
+      </div>
 
       <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-6">
         <h2 className="font-semibold">REST API anahtarları</h2>
