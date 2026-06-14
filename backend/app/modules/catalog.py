@@ -81,6 +81,14 @@ CATALOG: list[ModuleMeta] = [
         asset_types=["endpoint"],
         enabled=True,
     ),
+    ModuleMeta(
+        key="social_media",
+        name="Sosyal medya hesap taklidi",
+        description="Sahte/taklit hesap, sahte destek, kimlik avi",
+        category="brand",
+        asset_types=["brand", "keyword"],
+        enabled=True,
+    ),
 ]
 
 CATALOG_BY_KEY: dict[str, ModuleMeta] = {m.key: m for m in CATALOG}

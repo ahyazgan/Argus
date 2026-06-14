@@ -136,3 +136,17 @@ def test_competitor_homepage_live(monkeypatch):
     domain = os.getenv("COMPETITOR_TEST_DOMAIN", "example.com")
     records = HomepageWatchCollector().collect("domain", domain)
     assert isinstance(records, list)  # sinyal bulunmayabilir; sema bozulmamali
+
+
+@pytest.mark.skipif(
+    not os.getenv("SOCIAL_SEARCH_API_KEY"), reason="SOCIAL_SEARCH_API_KEY tanimli degil"
+)
+def test_social_search_live(monkeypatch):
+    from app.core.config import settings
+    from app.modules.social_media.collectors import SocialSearchCollector
+
+    monkeypatch.setattr(settings, "social_search_api_key", os.environ["SOCIAL_SEARCH_API_KEY"], raising=False)
+    records = SocialSearchCollector().collect("brand", os.getenv("SOCIAL_TEST_BRAND", "Markam"))
+    assert isinstance(records, list)
+    for r in records:
+        assert "handle" in r and "impersonation_type" in r  # analyzer ile uyumlu sema

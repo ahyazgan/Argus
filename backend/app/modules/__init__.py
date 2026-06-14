@@ -23,5 +23,6 @@ def load_modules() -> None:
     from app.modules.disinformation import module as _disinfo  # noqa: F401
     from app.modules.due_diligence import module as _dd  # noqa: F401
     from app.modules.ai_testing import module as _ai  # noqa: F401
+    from app.modules.social_media import module as _social  # noqa: F401
 
     _loaded = True

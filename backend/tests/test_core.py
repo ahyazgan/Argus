@@ -52,10 +52,11 @@ def test_plan_limits():
 
 
 def test_catalog_all_modules_live():
-    # Tum katalog (9 modul) artik canli
+    # Tum katalog modulleri canli (9 cekirdek + social_media)
     live = {m.key for m in CATALOG if m.enabled}
     assert live == VALID_MODULE_KEYS
-    assert len(CATALOG) == 9  # gorseldeki 9 modul
+    assert len(CATALOG) == 10
+    assert "social_media" in VALID_MODULE_KEYS
 
 
 def test_all_modules_register():
@@ -715,3 +716,66 @@ def test_dns_has_answer_and_brand_schema():
         "has_mx": mx_record,
     }
     assert brand_heuristic(rec, "markam.com", "brand").severity == "high"
+
+
+# --- social_media (sosyal medya hesap taklidi) modulu ---
+
+def test_social_media_heuristic_verified_is_critical():
+    from app.modules.social_media.analyzer import heuristic
+    res = heuristic(
+        {"platform": "instagram", "handle": "markam_official", "verified": True,
+         "followers": 12000, "uses_logo": True, "impersonation_type": "fake_official"},
+        "Markam", "brand",
+    )
+    assert res.severity == "critical"
+    assert "markam_official" in res.title
+
+
+def test_social_media_heuristic_fake_support_is_high():
+    from app.modules.social_media.analyzer import heuristic
+    res = heuristic(
+        {"platform": "x", "handle": "markamdestek", "verified": False,
+         "followers": 50, "impersonation_type": "fake_support"},
+        "Markam", "brand",
+    )
+    assert res.severity == "high"
+
+
+def test_social_media_heuristic_low_visibility_is_low():
+    from app.modules.social_media.analyzer import heuristic
+    res = heuristic(
+        {"platform": "tiktok", "handle": "markam.tr", "verified": False,
+         "followers": 10, "uses_logo": False, "impersonation_type": "handle_squat"},
+        "Markam", "brand",
+    )
+    assert res.severity == "low"
+
+
+def test_demo_impersonation_collector_deterministic_and_schema():
+    from app.modules.social_media.collectors import DemoImpersonationCollector
+    c = DemoImpersonationCollector()
+    recs = c.collect("brand", "Markam")
+    assert len(recs) >= 1
+    assert all({"platform", "handle", "impersonation_type"} <= set(r) for r in recs)
+    assert c.collect("brand", "Markam") == recs  # deterministik
+
+
+def test_parse_social_search_infers_type_and_feeds_heuristic():
+    from app.modules.social_media.analyzer import heuristic
+    from app.modules.social_media.collectors import parse_social_search
+    payload = {
+        "accounts": [
+            {"platform": "x", "handle": "markam_support", "verified": False,
+             "followers": 30, "bio": "Resmi destek hatti"},
+            {"platform": "instagram", "username": "markamofficial", "verified": True,
+             "followers": 9000, "uses_logo": True, "bio": "official markam"},
+        ]
+    }
+    recs = parse_social_search(payload, "Markam")
+    by_handle = {r["handle"]: r for r in recs}
+    assert by_handle["markam_support"]["impersonation_type"] == "fake_support"
+    assert by_handle["markamofficial"]["impersonation_type"] == "fake_official"
+    # Sema heuristic'i dogru besler: dogrulanmis -> critical, sahte destek -> high
+    assert heuristic(by_handle["markamofficial"], "Markam", "brand").severity == "critical"
+    assert heuristic(by_handle["markam_support"], "Markam", "brand").severity == "high"
+    assert parse_social_search({}, "Markam") == []

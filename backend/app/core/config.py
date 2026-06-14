@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     disinfo_news: bool = False
     # competitor_intel: rakip ana sayfasi izleme (anahtarsiz; true=ac)
     competitor_web_watch: bool = False
+    # social_media: sosyal medya hesap arama API'si (saglayici sozlesmesi; bos=demo)
+    social_search_api_key: str = ""
 
     # Bildirim esigi: bu onem seviyesi ve uzerindeki YENI bulgularda bildirim gonderilir
     # (info|low|medium|high|critical). Periyodik taramalarda tekrar eden bulgular bildirilmez.
