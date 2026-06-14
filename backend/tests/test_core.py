@@ -514,3 +514,37 @@ def test_events_format_and_channel():
     assert frame.endswith("\n\n")
     import json
     assert json.loads(frame[len("data: "):].strip())["new"] == 2
+
+
+# --- CSV disa aktarim saf mantik ---
+
+def test_findings_to_csv_header_and_rows():
+    from app.outputs.csv_export import findings_to_csv
+
+    class F:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    rows = [
+        F(detected_at=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc), severity="high",
+          status="new", module_key="darkweb", title="Sizinti", asset_value="ornek.com",
+          source="demo", seen_count=2, summary="ozet", recommendation="oneri"),
+    ]
+    out = findings_to_csv(rows)
+    lines = out.strip().split("\n")
+    assert lines[0].startswith("Tespit,Onem,Durum,Modul,Baslik")
+    assert "high" in lines[1] and "darkweb" in lines[1]
+    assert "2026-06-01T12:00:00+00:00" in lines[1]
+
+
+def test_findings_to_csv_escapes_commas_and_empty():
+    from app.outputs.csv_export import findings_to_csv
+
+    class F:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    rows = [F(title="a, b ve c", severity="low")]  # eksik alanlar None -> bos
+    out = findings_to_csv(rows)
+    assert '"a, b ve c"' in out  # virgul iceren alan tirnaklanir
+    assert findings_to_csv([]).strip().count("\n") == 0  # sadece baslik satiri

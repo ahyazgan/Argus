@@ -97,6 +97,8 @@ export default function ModulePage() {
   const [notice, setNotice] = useState("");
   const [scanning, setScanning] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
+  const [sevFilter, setSevFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   async function loadModule() {
     const mods = await api<ModuleItem[]>("/modules");
@@ -255,19 +257,28 @@ export default function ModulePage() {
     }
   }
 
-  function downloadPdf() {
+  function downloadReport(fmt: "pdf" | "csv") {
     const token = getToken();
-    fetch(`${apiBase()}/api/v1/reports/findings.pdf?module=${key}`, {
+    const qs = new URLSearchParams({ module: key });
+    if (sevFilter) qs.set("severity", sevFilter);
+    if (statusFilter) qs.set("status", statusFilter);
+    fetch(`${apiBase()}/api/v1/reports/findings.${fmt}?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.blob())
       .then((blob) => {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `argus-${key}-rapor.pdf`;
+        a.download = `argus-${key}-bulgular.${fmt}`;
         a.click();
+        URL.revokeObjectURL(a.href);
       });
   }
+
+  const visibleFindings = findings.filter(
+    (f) =>
+      (!sevFilter || f.severity === sevFilter) && (!statusFilter || f.status === statusFilter)
+  );
 
   if (notEnabled) {
     return (
@@ -291,12 +302,20 @@ export default function ModulePage() {
           <h1 className="text-2xl font-bold">{mod?.name ?? key}</h1>
           <p className="text-sm text-slate-400">{mod?.description}</p>
         </div>
-        <button
-          onClick={downloadPdf}
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
-        >
-          ⬇ PDF rapor indir
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => downloadReport("csv")}
+            className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+          >
+            ⬇ CSV indir
+          </button>
+          <button
+            onClick={() => downloadReport("pdf")}
+            className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+          >
+            ⬇ PDF rapor indir
+          </button>
+        </div>
       </div>
 
       {err && <p className="text-sm text-red-400">{err}</p>}
@@ -406,12 +425,57 @@ export default function ModulePage() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold">Bulgular ({findings.length})</h2>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold">
+            Bulgular ({visibleFindings.length}
+            {visibleFindings.length !== findings.length ? ` / ${findings.length}` : ""})
+          </h2>
+          <select
+            value={sevFilter}
+            onChange={(e) => setSevFilter(e.target.value)}
+            title="Önem filtresi"
+            className="ml-auto rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+          >
+            <option value="">Tüm önem seviyeleri</option>
+            {["critical", "high", "medium", "low", "info"].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            title="Durum filtresi"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs outline-none focus:border-sky-500"
+          >
+            <option value="">Tüm durumlar</option>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {(sevFilter || statusFilter) && (
+            <button
+              onClick={() => {
+                setSevFilter("");
+                setStatusFilter("");
+              }}
+              className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+            >
+              Temizle
+            </button>
+          )}
+        </div>
         <div className="space-y-2">
           {findings.length === 0 && (
             <p className="text-sm text-slate-400">Bulgu yok. Bir monitör için “Tara”ya basın.</p>
           )}
-          {findings.map((f) => (
+          {findings.length > 0 && visibleFindings.length === 0 && (
+            <p className="text-sm text-slate-400">Filtreye uyan bulgu yok.</p>
+          )}
+          {visibleFindings.map((f) => (
             <div
               key={f.id}
               className={`rounded-lg border border-slate-800 bg-slate-900 p-4 ${
