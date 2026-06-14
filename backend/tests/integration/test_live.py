@@ -11,9 +11,15 @@ Gerekli ortam degiskenleri (yalnizca calistirmak istediklerin):
     SHODAN_API_KEY        (+ ops. SHODAN_TEST_IP, varsayilan 8.8.8.8)
     GITHUB_TEST_REPO + GITHUB_TEST_TOKEN   (DIKKAT: gercek bir issue olusturur)
     STRIPE_SECRET_KEY + STRIPE_TEST_PRICE  (Stripe TEST anahtari kullanin)
+    CHAIN_ANALYSIS_API_KEY    (financial_crime -> OpenSanctions /match)
+    COURT_RECORDS_API_KEY     (due_diligence -> OpenCorporates arama)
+    RUN_LIVE_OSINT=1          (anahtarsiz ama AG gerektiren kaynaklar:
+                               disinformation -> Google News RSS,
+                               competitor_intel -> rakip ana sayfa)
 
-Not: HIBP/Shodan konnektorleri settings.{hibp,shodan}_api_key okur; bu alanlar ilgili
-ortam degiskenlerinden otomatik dolar.
+Not: Konnektorler settings.* alanlarini okur; bu alanlar ilgili ortam
+degiskenlerinden otomatik dolar. Bayrak gerektiren (anahtarsiz) kaynaklarda
+test, ilgili settings bayragini gecici olarak acar (monkeypatch).
 """
 from __future__ import annotations
 
@@ -80,3 +86,53 @@ def test_stripe_checkout_live():
         metadata={"organization_id": "test", "plan": "pro"},
     )
     assert session.url and session.url.startswith("https://")
+
+
+@pytest.mark.skipif(
+    not os.getenv("CHAIN_ANALYSIS_API_KEY"), reason="CHAIN_ANALYSIS_API_KEY tanimli degil"
+)
+def test_opensanctions_live_company_match():
+    from app.modules.financial_crime.collectors import OpenSanctionsCollector
+
+    company = os.getenv("OPENSANCTIONS_TEST_ENTITY", "Gazprom")
+    records = OpenSanctionsCollector().collect("company", company)
+    assert isinstance(records, list)
+    for r in records:
+        assert r["asset_value"] == company
+        assert "signal_type" in r  # analyzer ile uyumlu sema
+
+
+@pytest.mark.skipif(
+    not os.getenv("COURT_RECORDS_API_KEY"), reason="COURT_RECORDS_API_KEY tanimli degil"
+)
+def test_opencorporates_live_company_search():
+    from app.modules.due_diligence.collectors import OpenCorporatesCollector
+
+    company = os.getenv("OPENCORPORATES_TEST_COMPANY", "Google")
+    records = OpenCorporatesCollector().collect("company", company)
+    assert isinstance(records, list)
+    for r in records:
+        assert "record_type" in r  # analyzer ile uyumlu sema
+
+
+@pytest.mark.skipif(not os.getenv("RUN_LIVE_OSINT"), reason="RUN_LIVE_OSINT tanimli degil")
+def test_google_news_live_returns_items(monkeypatch):
+    from app.core.config import settings
+    from app.modules.disinformation.collectors import GoogleNewsCollector
+
+    monkeypatch.setattr(settings, "disinfo_news", True, raising=False)
+    records = GoogleNewsCollector().collect("keyword", os.getenv("NEWS_TEST_QUERY", "bitcoin"))
+    assert isinstance(records, list)
+    for r in records:
+        assert "claim" in r and r["asset_value"]  # analyzer ile uyumlu sema
+
+
+@pytest.mark.skipif(not os.getenv("RUN_LIVE_OSINT"), reason="RUN_LIVE_OSINT tanimli degil")
+def test_competitor_homepage_live(monkeypatch):
+    from app.core.config import settings
+    from app.modules.competitor_intel.collectors import HomepageWatchCollector
+
+    monkeypatch.setattr(settings, "competitor_web_watch", True, raising=False)
+    domain = os.getenv("COMPETITOR_TEST_DOMAIN", "example.com")
+    records = HomepageWatchCollector().collect("domain", domain)
+    assert isinstance(records, list)  # sinyal bulunmayabilir; sema bozulmamali
