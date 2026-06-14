@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     google_cse_id: str = ""
     # disinformation: Google News RSS (anahtarsiz medya-mention izleme; true=ac)
     disinfo_news: bool = False
+    # competitor_intel: rakip ana sayfasi izleme (anahtarsiz; true=ac)
+    competitor_web_watch: bool = False
 
     # Bildirim esigi: bu onem seviyesi ve uzerindeki YENI bulgularda bildirim gonderilir
     # (info|low|medium|high|critical). Periyodik taramalarda tekrar eden bulgular bildirilmez.

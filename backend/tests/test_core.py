@@ -492,3 +492,13 @@ def test_parse_news_rss():
     assert len(recs) == 2
     assert recs[0]["signal_type"] == "fake_news"
     assert recs[0]["claim"] == "Markam hakkinda iddia"
+
+
+def test_parse_competitor_html_signals():
+    from app.modules.competitor_intel.collectors import parse_competitor_html
+    html = '<html><body><a href="/kariyer">Kariyer</a> Yeni urun lansman duyurusu!</body></html>'
+    recs = parse_competitor_html(html, "rakip.com", base_url="https://rakip.com")
+    types = {r["change_type"] for r in recs}
+    assert "hiring_signal" in types and "new_product" in types
+    # Isaret yoksa bos doner (gurultu sinirlama)
+    assert parse_competitor_html("<html>bos</html>", "rakip.com") == []

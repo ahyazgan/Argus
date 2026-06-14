@@ -138,11 +138,13 @@ docker compose exec backend pytest -m integration    # canlı API testleri (kiml
   | due_diligence | OpenCorporates (`COURT_RECORDS_API_KEY`) | ✅ gerçek API (anahtar gerektirir) |
   | illegal_site | Google CSE (`SEARCH_API_KEY` + `GOOGLE_CSE_ID`) | ✅ gerçek API (anahtar gerektirir) |
   | financial_crime | OpenSanctions (`CHAIN_ANALYSIS_API_KEY`) | ✅ gerçek API (anahtar gerektirir) |
-  | competitor_intel | Web kazıma sağlayıcısı (`SCRAPE_API_KEY`) | ⏳ stub (sağlayıcı sözleşmesi gerektirir) |
+  | competitor_intel | Ana sayfa izleme (`COMPETITOR_WEB_WATCH=true`) | ✅ gerçek, anahtarsız (sezgisel) |
 
-  Anahtar/sağlayıcı yoksa veya bayrak kapalıysa ilgili modül deterministik demo konnektörüne
-  düşer (demo akışı bozulmaz). Gerçek konnektörlerin yanıt ayrıştırıcıları (parser) sağlayıcıya
-  erişmeden birim testleriyle doğrulanır.
+  **9/9 modülün gerçek konnektör yolu var** (6'sı anahtarsız çalışır). Anahtar/sağlayıcı yoksa
+  veya bayrak kapalıysa ilgili modül deterministik demo konnektörüne düşer (demo akışı bozulmaz).
+  Gerçek konnektörlerin yanıt ayrıştırıcıları (parser) sağlayıcıya erişmeden birim testleriyle
+  doğrulanır. (competitor_intel ana sayfa izleme sezgiseldir; genel fiyat/ürün çıkarımı için
+  `SCRAPE_API_KEY` ile bir kazıma sağlayıcısı ileride takılabilir.)
 - **Stripe** gerçek akış için hazır: `STRIPE_ENABLED=true` + `STRIPE_SECRET_KEY` +
   `STRIPE_PRICE_*` ile checkout oturumu açılır, `/billing/webhook` imza doğrulayıp
   aboneliği günceller. Kapalıyken stub döner (plan limiti dayatması yine çalışır).
