@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.sync_db import SyncSessionLocal
 from app.core.utils import finding_fingerprint, severity_at_least
+from app.core_services.events import publish_event
 from app.core_services.notifications.engine import OutputChannels, notify_finding
 from app.core_services.queue.celery_app import celery_app
 from app.models.finding import Finding, FindingSeverity
@@ -143,6 +144,18 @@ def run_module_scan(task_id: str, monitor_id: str) -> dict:
             task.findings_count = findings_count
             task.finished_at = datetime.now(timezone.utc)
             db.commit()
+
+            # Gercek-zamanli dashboard: yeni/guncellenen bulgu varsa olay yayinla
+            if findings_count or updated_count:
+                publish_event(
+                    monitor.organization_id,
+                    {
+                        "type": "findings",
+                        "module": monitor.module_key,
+                        "new": findings_count,
+                        "updated": updated_count,
+                    },
+                )
         except Exception as exc:  # noqa: BLE001
             db.rollback()
             task = db.get(Task, uuid.UUID(task_id))

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, apiBase, getToken } from "@/lib/api";
 
 type Subscription = {
   plan_name: string;
@@ -50,19 +50,47 @@ export default function DashboardPage() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [err, setErr] = useState("");
+  const [live, setLive] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    Promise.all([
+  async function loadData() {
+    const [s, f, st] = await Promise.all([
       api<Subscription>("/modules/subscription"),
       api<Finding[]>("/findings?limit=8"),
       api<Stats>("/findings/stats"),
-    ])
-      .then(([s, f, st]) => {
-        setSub(s);
-        setFindings(f);
-        setStats(st);
-      })
-      .catch((e) => setErr(e.message));
+    ]);
+    setSub(s);
+    setFindings(f);
+    setStats(st);
+  }
+
+  useEffect(() => {
+    loadData().catch((e) => setErr(e.message));
+
+    // Gercek-zamanli akis: yeni bulguda dashboard'u tazele
+    const token = getToken();
+    if (!token) return;
+    const es = new EventSource(`${apiBase()}/api/v1/events/stream?token=${encodeURIComponent(token)}`);
+    es.onopen = () => setLive(true);
+    es.onerror = () => setLive(false);
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === "findings") {
+          loadData().catch(() => {});
+          setFlash(true);
+          if (flashTimer.current) clearTimeout(flashTimer.current);
+          flashTimer.current = setTimeout(() => setFlash(false), 2500);
+        }
+      } catch {
+        /* connected/keepalive cerceveleri yok sayilir */
+      }
+    };
+    return () => {
+      es.close();
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    };
   }, []);
 
   const sevMax = Math.max(1, ...Object.values(stats?.by_severity ?? {}));
@@ -71,9 +99,22 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Genel bakış</h1>
-        <p className="text-sm text-slate-400">Tehdit istihbaratı komuta merkezi</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Genel bakış</h1>
+          <p className="text-sm text-slate-400">Tehdit istihbaratı komuta merkezi</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {flash && (
+            <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300">
+              ↻ Yeni bulgu
+            </span>
+          )}
+          <span className="flex items-center gap-1.5 text-xs text-slate-400">
+            <span className={`h-2 w-2 rounded-full ${live ? "bg-emerald-500" : "bg-slate-600"}`} />
+            {live ? "Canlı" : "Bağlı değil"}
+          </span>
+        </div>
       </div>
 
       {err && <p className="text-sm text-red-400">{err}</p>}

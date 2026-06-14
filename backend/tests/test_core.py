@@ -502,3 +502,15 @@ def test_parse_competitor_html_signals():
     assert "hiring_signal" in types and "new_product" in types
     # Isaret yoksa bos doner (gurultu sinirlama)
     assert parse_competitor_html("<html>bos</html>", "rakip.com") == []
+
+
+# --- Gercek-zamanli olaylar (SSE) saf mantik ---
+
+def test_events_format_and_channel():
+    from app.core_services.events import channel_for, format_sse
+    assert channel_for("abc") == "argus:events:abc"
+    frame = format_sse({"type": "findings", "new": 2})
+    assert frame.startswith("data: ")
+    assert frame.endswith("\n\n")
+    import json
+    assert json.loads(frame[len("data: "):].strip())["new"] == 2

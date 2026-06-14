@@ -7,6 +7,7 @@ from app.api.v1 import (
     audit,
     auth,
     billing,
+    events,
     findings,
     health,
     modules,
@@ -29,3 +30,4 @@ api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 api_router.include_router(settings_api.router, prefix="/settings", tags=["settings"])
 api_router.include_router(team.router, prefix="/team", tags=["team"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+api_router.include_router(events.router, prefix="/events", tags=["events"])
