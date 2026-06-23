@@ -11,7 +11,7 @@ from app.modules.catalog import CATALOG, VALID_MODULE_KEYS
 from app.modules.darkweb.analyzer import heuristic as darkweb_heuristic
 from app.modules.darkweb.collectors import DemoLeakCollector
 from app.modules.illegal_site.analyzer import heuristic as illegal_heuristic
-from app.modules.illegal_site.collectors import SuspiciousSiteCollector
+from app.modules.illegal_site.collectors import SuspiciousSiteCollector, lookalike_variants
 from app.modules.security_scan.analyzer import heuristic as security_heuristic
 from app.modules.security_scan.collectors import SurfaceProbeCollector
 from app.modules.brand_protection.analyzer import heuristic as brand_heuristic
@@ -97,6 +97,37 @@ def test_suspicious_site_collector_produces_candidates():
     assert len(recs) >= 1
     assert all("candidate_domain" in r for r in recs)
     assert c.collect("brand", "markam") == recs  # deterministik
+
+
+def test_lookalike_variants_are_deterministic_and_categorized():
+    a = lookalike_variants("markam")
+    assert a == lookalike_variants("markam")  # saf/deterministik (ag yok)
+    assert len(a) >= 1
+    assert all("markam" in v["candidate_domain"] for v in a)
+    assert {v["category_hint"] for v in a} <= {"gambling", "fraud"}
+    # cok kisa etiket aday uretmemeli (gurultu/yanlis pozitif onleme)
+    assert lookalike_variants("ab") == []
+
+
+def test_illegal_site_heuristic_escalates_to_critical_with_evidence():
+    raw = {
+        "candidate_domain": "markam-bahis.xyz",
+        "category_hint": "fraud",
+        "registered": True,
+        "domain_age_days": 5,
+        "keyword_hits": ["giris yap", "sifre"],
+        "has_payment_form": True,
+    }
+    res = illegal_heuristic(raw, "markam", "brand")
+    assert res.severity == "critical"  # yeni domain + anahtar kelime + odeme formu
+    assert "Kanit:" in res.summary
+
+    # kanit yokken geriye-uyumlu: en az 'high'
+    plain = illegal_heuristic(
+        {"candidate_domain": "markam-odeme.com", "category_hint": "fraud"}, "markam", "brand"
+    )
+    assert plain.severity == "high"
+    assert "Kanit:" not in plain.summary
 
 
 def test_security_heuristic_exposed_sensitive_service_is_critical():

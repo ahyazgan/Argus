@@ -51,10 +51,14 @@ class Settings(BaseSettings):
     shodan_api_key: str = ""  # Shodan (security_scan) - GERCEK baglandi
     # Marka koruma: gercek DNS-over-HTTPS dogrulamasi (anahtarsiz; bayrakla acilir)
     brand_dns_check: bool = False
+    # Yasadisi site tespiti: anahtarsiz gercek sinyaller (bayrakla acilir)
+    illegal_dns_check: bool = False  # benzer (typosquat) adaylari DNS ile dogrula (crt.sh + DoH)
+    illegal_live_enrich: bool = False  # adaylari canli zenginlestir (HTTP icerik + RDAP WHOIS yasi)
     # Diger modullerin gercek kaynak anahtarlari (saglayici sozlesmesi gerektirir;
     # bos ise demo konnektore dusulur). Entegrasyon noktalari konnektor stub'larinda.
     brand_feed_api_key: str = ""  # brand_protection (yeni kayit/WHOIS feed)
-    search_api_key: str = ""  # illegal_site (arama/domain feed)
+    search_api_key: str = ""  # illegal_site (Google Programmable Search API anahtari)
+    search_engine_id: str = ""  # illegal_site (Google CSE "cx" - Programmable Search motor kimligi)
     chain_analysis_api_key: str = ""  # financial_crime (zincir analizi/yaptirim)
     scrape_api_key: str = ""  # competitor_intel (web kazima/fiyat)
     social_api_key: str = ""  # disinformation (sosyal medya/anlati)

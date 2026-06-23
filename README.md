@@ -133,7 +133,9 @@ docker compose exec backend pytest -m integration    # canlı API testleri (kiml
   | darkweb | HaveIBeenPwned (`HIBP_API_KEY`) | ✅ gerçek API bağlı |
   | security_scan | Shodan (`SHODAN_API_KEY`) | ✅ gerçek API bağlı |
   | brand_protection | DNS-over-HTTPS (`BRAND_DNS_CHECK=true`) | ✅ gerçek, anahtarsız |
-  | illegal_site / financial_crime / competitor_intel / disinformation / due_diligence / ai_testing | arama/zincir/scrape/sosyal/sicil/uç-nokta API'leri | ⏳ entegrasyon noktası hazır (stub); sağlayıcı anahtarı gerektirir |
+  | illegal_site | Certificate Transparency (crt.sh) + DNS-over-HTTPS (`ILLEGAL_DNS_CHECK=true`); canlı içerik + RDAP WHOIS yaşı (`ILLEGAL_LIVE_ENRICH=true`) | ✅ gerçek, anahtarsız |
+  | illegal_site (opsiyonel) | Google Programmable Search (`SEARCH_API_KEY` + `SEARCH_ENGINE_ID`) | ✅ gerçek API bağlı |
+  | financial_crime / competitor_intel / disinformation / due_diligence / ai_testing | zincir/scrape/sosyal/sicil/uç-nokta API'leri | ⏳ entegrasyon noktası hazır (stub); sağlayıcı anahtarı gerektirir |
 
   Anahtar/sağlayıcı yoksa ilgili modül deterministik demo konnektörüne düşer (demo akışı bozulmaz).
 - **Stripe** gerçek akış için hazır: `STRIPE_ENABLED=true` + `STRIPE_SECRET_KEY` +
@@ -160,6 +162,9 @@ docker compose exec backend pytest -m integration    # canlı API testleri (kiml
 - ~~Gerçek Stripe checkout + webhook'ları~~ — **tamamlandı** (kimlik bilgisi gerektirir)
 - ~~Gerçek dark web / sızıntı feed entegrasyonları~~ — **tamamlandı:** HIBP + Shodan
   (API anahtarı gerektirir; anahtarsız demo konnektör çalışır)
+- ~~Yasadışı site tespiti için gerçek kaynaklar~~ — **tamamlandı:** Certificate Transparency
+  (crt.sh) + DNS-over-HTTPS doğrulaması + canlı içerik/RDAP WHOIS zenginleştirmesi (anahtarsız)
+  + opsiyonel Google Programmable Search; ağırlıklı kanıt skoru triyaja bağlandı
 - CI + Alembic baseline + bağımlılık pinleri — **tamamlandı**
 - ~~BTK/kamu çıktı kanalı~~ — **tamamlandı** (yapılandırılabilir uç nokta; BTK/MASAK/USOM)
 - ~~Çok kullanıcılı rol yönetimi~~ — **tamamlandı** (Sahip/Yönetici/Üye + `require_role`)
